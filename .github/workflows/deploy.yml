@@ -1,0 +1,253 @@
+name: Deploy Tree Pruning
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Acción a ejecutar"
+        required: true
+        default: "deploy"
+        type: choice
+        options:
+          - deploy          # Pull + docker compose up -d
+          - restart         # docker compose restart
+          - down            # docker compose down
+          - fix-kong        # Aplicar fix pg_hba (solo 1ra vez)
+          - renew-token     # Renovar token Infisical en el servidor
+
+env:
+  REPO_DIR: /home/${{ secrets.AZURE_USER }}/tree-pruning
+
+# Las credenciales de Infisical (CLIENT_ID, CLIENT_SECRET, PROJECT_ID, TOKEN)
+# ya viven en ~/.bashrc del servidor. El workflow no las inyecta — las usa
+# vía `source ~/.bashrc` dentro de cada ssh.
+#
+# Secrets de GitHub requeridos:
+#   AZURE_HOST      — IP pública de la VM
+#   AZURE_USER      — Usuario SSH (treepruning)
+#   AZURE_SSH_KEY   — Contenido del archivo .pem
+
+jobs:
+  deploy:
+    name: Deploy a Azure VM
+    runs-on: ubuntu-latest
+
+    steps:
+      # ─────────────────────────────────────────
+      # 1. Checkout
+      # ─────────────────────────────────────────
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      # ─────────────────────────────────────────
+      # 2. Validar secrets requeridos
+      # ─────────────────────────────────────────
+      - name: Validar secrets de GitHub
+        run: |
+          MISSING=()
+          [[ -z "${{ secrets.AZURE_HOST }}" ]] && MISSING+=("AZURE_HOST")
+          [[ -z "${{ secrets.AZURE_USER }}" ]] && MISSING+=("AZURE_USER")
+          [[ -z "${{ secrets.AZURE_SSH_KEY }}" ]] && MISSING+=("AZURE_SSH_KEY")
+
+          if [ ${#MISSING[@]} -ne 0 ]; then
+            echo "Faltan secrets en GitHub: ${MISSING[@]}"
+            echo "Configurar en: Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+          echo "Secrets de GitHub configurados"
+
+      # ─────────────────────────────────────────
+      # 3. Preparar clave SSH
+      # ─────────────────────────────────────────
+      - name: Configurar SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.AZURE_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.AZURE_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      # ─────────────────────────────────────────
+      # 4. Sincronizar archivos del repo al servidor
+      # ─────────────────────────────────────────
+      - name: Sincronizar archivos al servidor
+        # Excludes que preservan estado runtime de la VM:
+        #   strapi-app/                  → generado por setup-strapi.sh
+        #   docker/traefik/letsencrypt/  → certificados Let's Encrypt (NUNCA borrar)
+        #   docker/traefik/acme.json     → certificados (formato antiguo, por si acaso)
+        #   infisical.json               → generado en runtime con el token
+        #   .env                         → defensa: NO debe existir, todos los
+        #                                  secretos viven en Infisical
+        run: |
+          rsync -avz --delete \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude 'strapi-app/' \
+            --exclude 'docker/traefik/letsencrypt/' \
+            --exclude 'docker/traefik/acme.json' \
+            --exclude 'infisical.json' \
+            --exclude '.env' \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            ./ ${{ secrets.AZURE_USER }}@${{ secrets.AZURE_HOST }}:${{ env.REPO_DIR }}/
+
+      # ─────────────────────────────────────────
+      # 5. Permisos de scripts
+      # ─────────────────────────────────────────
+      - name: Ajustar permisos en el servidor
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.AZURE_USER }}@${{ secrets.AZURE_HOST }} \
+            "chmod +x ${{ env.REPO_DIR }}/scripts/*.sh \
+             && chmod +x ${{ env.REPO_DIR }}/docker/postgres/init-multiple-dbs.sh"
+
+      # ─────────────────────────────────────────
+      # 6. Renovar token de Infisical (opcional)
+      # Solo se ejecuta si todas las credenciales están en ~/.bashrc.
+      # Si el token vigente todavía es válido, no hace nada.
+      # ─────────────────────────────────────────
+      - name: Renovar token de Infisical (best-effort)
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.AZURE_USER }}@${{ secrets.AZURE_HOST }} << 'ENDSSH'
+            set -a; source ~/.bashrc; set +a
+            if [[ -n "${INFISICAL_CLIENT_ID:-}" && -n "${INFISICAL_CLIENT_SECRET:-}" && -n "${INFISICAL_PROJECT_ID:-}" ]]; then
+              echo "[RENEW] Renovando token con credenciales del bashrc..."
+              bash $TP_REPO_DIR/scripts/ci-renew-token.sh || \
+                echo "[WARN] Renovación falló; se usará el token actual"
+            else
+              echo "[SKIP] Faltan INFISICAL_CLIENT_ID/SECRET/PROJECT_ID en bashrc — se usa token actual"
+            fi
+          ENDSSH
+
+      # ─────────────────────────────────────────
+      # 7. Crear strapi-app si no existe
+      # ─────────────────────────────────────────
+      - name: Setup Strapi (si no existe)
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.AZURE_USER }}@${{ secrets.AZURE_HOST }} << 'ENDSSH'
+            set -a; source ~/.bashrc; set +a
+            TP_DIR="${TP_REPO_DIR:-$HOME/tree-pruning}"
+            if [ ! -d "$TP_DIR/strapi-app" ] || \
+               [ ! -f "$TP_DIR/strapi-app/package.json" ]; then
+              echo "[SETUP] Creando proyecto Strapi..."
+              bash $TP_DIR/scripts/setup-strapi.sh
+            else
+              echo "[OK] strapi-app/ ya existe"
+            fi
+          ENDSSH
+
+      # ─────────────────────────────────────────
+      # 8. Ejecutar acción principal
+      # ─────────────────────────────────────────
+      - name: Ejecutar acción — ${{ github.event.inputs.action || 'deploy' }}
+        run: |
+          ACTION="${{ github.event.inputs.action || 'deploy' }}"
+
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.AZURE_USER }}@${{ secrets.AZURE_HOST }} << ENDSSH
+            set -a; source ~/.bashrc; set +a
+            TP_DIR="\${TP_REPO_DIR:-\$HOME/tree-pruning}"
+            cd \$TP_DIR
+
+            case "$ACTION" in
+              deploy)
+                echo "[DEPLOY] Login a GHCR (si las imágenes son privadas)..."
+                infisical run \
+                  --env=dev \
+                  --projectId=\$INFISICAL_PROJECT_ID \
+                  --token=\$INFISICAL_TOKEN \
+                  -- bash -c 'if [[ -n "\${GHCR_USER:-}" && -n "\${GHCR_TOKEN:-}" ]]; then echo "\$GHCR_TOKEN" | docker login ghcr.io -u "\$GHCR_USER" --password-stdin; fi'
+
+                echo "[DEPLOY] Levantando servicios..."
+                infisical run \
+                  --env=dev \
+                  --projectId=\$INFISICAL_PROJECT_ID \
+                  --token=\$INFISICAL_TOKEN \
+                  -- docker compose up -d --remove-orphans
+                echo "[OK] docker compose up completado"
+                ;;
+
+              restart)
+                echo "[RESTART] Reiniciando servicios..."
+                infisical run \
+                  --env=dev \
+                  --projectId=\$INFISICAL_PROJECT_ID \
+                  --token=\$INFISICAL_TOKEN \
+                  -- docker compose restart
+                ;;
+
+              down)
+                echo "[DOWN] Apagando servicios..."
+                docker compose down
+                ;;
+
+              fix-kong)
+                echo "[FIX-KONG] Aplicando fix de pg_hba..."
+                bash \$TP_DIR/scripts/fix-kong.sh --yes
+                ;;
+
+              renew-token)
+                echo "[RENEW] Token ya renovado en el paso anterior"
+                ;;
+            esac
+          ENDSSH
+
+      # ─────────────────────────────────────────
+      # 9. Health check
+      # ─────────────────────────────────────────
+      - name: Health check de servicios
+        if: ${{ github.event.inputs.action == 'deploy' || github.event.inputs.action == '' }}
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.AZURE_USER }}@${{ secrets.AZURE_HOST }} << 'ENDSSH'
+            set -a; source ~/.bashrc; set +a
+            cd ${TP_REPO_DIR:-$HOME/tree-pruning}
+
+            echo ""
+            echo "════════════════════════════════════"
+            echo " Estado de contenedores"
+            echo "════════════════════════════════════"
+            docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+
+            echo ""
+            echo "════════════════════════════════════"
+            echo " Uso de recursos"
+            echo "════════════════════════════════════"
+            docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+          ENDSSH
+
+      # ─────────────────────────────────────────
+      # 10. Notificación de resultado
+      # ─────────────────────────────────────────
+      - name: Deploy completado
+        if: success()
+        run: |
+          echo "### Deploy exitoso" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Servicio | URL |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | https://treepruning.org |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend Dev | https://dev.treepruning.org |" >> $GITHUB_STEP_SUMMARY
+          echo "| API (Kong) | https://api.treepruning.org |" >> $GITHUB_STEP_SUMMARY
+          echo "| API Dev | https://api-dev.treepruning.org |" >> $GITHUB_STEP_SUMMARY
+          echo "| Auth (Keycloak) | https://auth.treepruning.org |" >> $GITHUB_STEP_SUMMARY
+          echo "| CMS (Strapi) | https://cms.treepruning.org/admin |" >> $GITHUB_STEP_SUMMARY
+          echo "| MinIO Consola | https://console.treepruning.org |" >> $GITHUB_STEP_SUMMARY
+          echo "| Grafana | https://grafana.treepruning.org |" >> $GITHUB_STEP_SUMMARY
+          echo "| SonarQube | https://sonar.treepruning.org |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Acción:** ${{ github.event.inputs.action || 'deploy' }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Deploy falló
+        if: failure()
+        run: |
+          echo "### Deploy falló" >> $GITHUB_STEP_SUMMARY
+          echo "Revisar los logs del step que falló." >> $GITHUB_STEP_SUMMARY

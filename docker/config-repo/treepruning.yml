@@ -1,0 +1,28 @@
+treepruning:
+  pqr:
+    plazo-interes-particular: 15
+    plazo-interes-general: 15
+    plazo-solicitud-informacion: 10
+    alerta-anticipacion-dias: 3
+
+  cache:
+    ttl-inventario-arboles: 300
+    ttl-podas-programadas: 180
+    ttl-parametros-sistema: 3600
+
+  seguridad:
+    recaptcha-score-minimo: 0.5
+    max-intentos-fallidos: 3
+    minutos-bloqueo-temporal: 5
+
+  minio:
+    bucket-evidencias: treepruning-evidencias
+    endpoint: https://s3.treepruning.org
+
+  keycloak:
+    realm: treepruning
+    auth-server-url: https://auth.treepruning.org
+    client-id: treepruning-backend
+
+  kong:
+    admin-url: http://tp-kong:8001

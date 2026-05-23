@@ -1,0 +1,31 @@
+# docker/traefik/dynamic/middlewares.yml
+# Configuración dinámica de Traefik — se recarga sin reiniciar el contenedor
+
+http:
+  middlewares:
+    # Whitelist para rutas internas (Kong Admin, Config Server, Prometheus)
+    # Agregar aquí las IPs de tu equipo / VPN
+    ipwhitelist:
+      ipWhiteList:
+        sourceRange:
+          - "127.0.0.1/32"
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
+          # Agrega tu IP pública aquí:
+          # - "TU_IP_PUBLICA/32"
+
+    # Compresión de respuestas
+    compress:
+      compress: {}
+
+    # Headers de seguridad para todos los servicios
+    security-headers:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        forceSTSHeader: true
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true

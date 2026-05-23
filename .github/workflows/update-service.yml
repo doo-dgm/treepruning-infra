@@ -1,0 +1,77 @@
+name: Actualizar servicio de aplicación
+
+on:
+  repository_dispatch:
+    types: [update-backend, update-frontend]
+
+# Las credenciales de Infisical viven en ~/.bashrc del servidor.
+# GitHub Secrets requeridos: AZURE_HOST, AZURE_USER, AZURE_SSH_KEY (solo SSH).
+
+jobs:
+
+  update:
+    name: Actualizar ${{ github.event.client_payload.service }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configurar SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.AZURE_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.AZURE_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Actualizar contenedor en el servidor
+        run: |
+          SERVICE="${{ github.event.client_payload.service }}"
+
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.AZURE_USER }}@${{ secrets.AZURE_HOST }} << ENDSSH
+            set -a; source ~/.bashrc; set +a
+            TP_DIR="\${TP_REPO_DIR:-\$HOME/tree-pruning}"
+            cd \$TP_DIR
+
+            echo "[UPDATE] Actualizando $SERVICE..."
+
+            # Login a GHCR usando credenciales desde Infisical (imágenes privadas).
+            # Si GHCR_USER / GHCR_TOKEN no están en Infisical, se omite (imágenes públicas).
+            infisical run \
+              --env=dev \
+              --projectId=\$INFISICAL_PROJECT_ID \
+              --token=\$INFISICAL_TOKEN \
+              -- bash -c 'if [[ -n "\${GHCR_USER:-}" && -n "\${GHCR_TOKEN:-}" ]]; then echo "\$GHCR_TOKEN" | docker login ghcr.io -u "\$GHCR_USER" --password-stdin; fi'
+
+            infisical run \
+              --env=dev \
+              --projectId=\$INFISICAL_PROJECT_ID \
+              --token=\$INFISICAL_TOKEN \
+              -- docker compose pull $SERVICE
+
+            infisical run \
+              --env=dev \
+              --projectId=\$INFISICAL_PROJECT_ID \
+              --token=\$INFISICAL_TOKEN \
+              -- docker compose up -d --no-deps $SERVICE
+
+            echo "[OK] $SERVICE actualizado"
+            docker compose ps $SERVICE
+          ENDSSH
+
+      - name: Resumen del deploy
+        if: success()
+        run: |
+          SERVICE="${{ github.event.client_payload.service }}"
+          echo "### ✅ $SERVICE actualizado" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Campo | Valor |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Servicio | $SERVICE |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | ${{ github.event.client_payload.sha }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Desplegado por | ${{ github.event.client_payload.actor }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Resumen de fallo
+        if: failure()
+        run: |
+          echo "### ❌ Falló la actualización de ${{ github.event.client_payload.service }}" >> $GITHUB_STEP_SUMMARY
+          echo "Revisar los logs del step que falló." >> $GITHUB_STEP_SUMMARY

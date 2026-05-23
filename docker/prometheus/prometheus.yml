@@ -1,0 +1,39 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Backend desplegado en la VM (servicio docker)
+  - job_name: "treepruning-backend"
+    metrics_path: "/actuator/prometheus"
+    static_configs:
+      - targets: ["tp-backend:8080"]
+    scrape_interval: 10s
+
+  - job_name: "kong"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["tp-kong:8001"]
+
+  # Backend corriendo en local (puerto 8081 del host vía gateway de la red docker).
+  # Útil cuando un dev levanta su backend localmente y quiere ver métricas en Grafana.
+  # Si no hay nada escuchando, Prometheus reporta el target como DOWN — no afecta al resto.
+  - job_name: "treepruning-backend-local"
+    metrics_path: "/actuator/prometheus"
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["172.18.0.1:8081"]
+        labels:
+          environment: "local"
+
+  # Self-monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Traefik (deshabilitado — el traefik.yml actual no expone /metrics).
+  # Para habilitarlo: añadir `metrics: { prometheus: { entryPoint: traefik } }`
+  # al traefik.yml y exponer puerto 8082.
+  # - job_name: "traefik"
+  #   static_configs:
+  #     - targets: ["tp-traefik:8082"]
