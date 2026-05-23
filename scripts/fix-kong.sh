@@ -1,6 +1,6 @@
 #!/bin/bash
 # scripts/fix-kong.sh
-# Fix de pg_hba.conf para Kong — se aplica UNA SOLA VEZ después del primer docker compose up
+# Fix de pg_hba.conf para Kong -- se aplica UNA SOLA VEZ después del primer docker compose up
 # Kong no soporta autenticación scram-sha-256, requiere md5
 #
 # Requiere (cargar con: source ~/.bashrc):

@@ -1,23 +1,23 @@
-name: 🌱 Bootstrap servidor (1 vez por VM nueva)
+name: Bootstrap servidor (1 vez por VM nueva)
 
 # Ejecutar UNA SOLA VEZ en cada VM nueva.
 # Provisiona dependencias (Docker, Infisical CLI) y planta las credenciales
-# de Infisical en ~/.bashrc del servidor. Después de esto, deploy.yml
+# de Infisical en ~/.bashrc del servidor. Despues de esto, deploy.yml
 # funciona sin necesidad de secretos de Infisical en GitHub.
 #
 # Secrets de GitHub requeridos para este workflow:
-#   AZURE_HOST                 — IP pública de la VM
-#   AZURE_USER                 — Usuario SSH (treepruning)
-#   AZURE_SSH_KEY              — Contenido del archivo .pem
-#   INFISICAL_CLIENT_ID        — Machine Identity (Universal Auth)
-#   INFISICAL_CLIENT_SECRET    — Machine Identity (Universal Auth)
-#   INFISICAL_PROJECT_ID       — workspaceId de Infisical
+#   AZURE_HOST                 - IP publica de la VM
+#   AZURE_USER                 - Usuario SSH (treepruning)
+#   AZURE_SSH_KEY              - Contenido del archivo .pem
+#   INFISICAL_CLIENT_ID        - Machine Identity (Universal Auth)
+#   INFISICAL_CLIENT_SECRET    - Machine Identity (Universal Auth)
+#   INFISICAL_PROJECT_ID       - workspaceId de Infisical
 
 on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: "Escribir 'BOOTSTRAP' para confirmar (acción destructiva en la VM)"
+        description: "Escribir 'BOOTSTRAP' para confirmar (accion destructiva en la VM)"
         required: true
         type: string
 
@@ -30,18 +30,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: ⛔ Verificar confirmación
+      - name: Verificar confirmacion
         run: |
           if [[ "${{ github.event.inputs.confirm }}" != "BOOTSTRAP" ]]; then
-            echo "❌ Debes escribir 'BOOTSTRAP' (exacto) para confirmar"
+            echo "[ERROR] Debes escribir 'BOOTSTRAP' (exacto) para confirmar"
             exit 1
           fi
-          echo "✅ Confirmación válida"
+          echo "[OK] Confirmacion valida"
 
-      - name: 📥 Checkout repositorio
+      - name: Checkout repositorio
         uses: actions/checkout@v4
 
-      - name: ✅ Validar secrets de GitHub
+      - name: Validar secrets de GitHub
         run: |
           MISSING=()
           [[ -z "${{ secrets.AZURE_HOST }}" ]] && MISSING+=("AZURE_HOST")
@@ -52,20 +52,20 @@ jobs:
           [[ -z "${{ secrets.INFISICAL_PROJECT_ID }}" ]] && MISSING+=("INFISICAL_PROJECT_ID")
 
           if [ ${#MISSING[@]} -ne 0 ]; then
-            echo "❌ Faltan secrets en GitHub: ${MISSING[@]}"
-            echo "Configurar en: Settings → Secrets and variables → Actions"
+            echo "[ERROR] Faltan secrets en GitHub: ${MISSING[@]}"
+            echo "Configurar en: Settings -> Secrets and variables -> Actions"
             exit 1
           fi
-          echo "✅ Todos los secrets configurados"
+          echo "[OK] Todos los secrets configurados"
 
-      - name: 🔑 Configurar SSH
+      - name: Configurar SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.AZURE_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.AZURE_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: 📂 Sincronizar repo al servidor
+      - name: Sincronizar repo al servidor
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
             ${{ secrets.AZURE_USER }}@${{ secrets.AZURE_HOST }} \
@@ -79,17 +79,17 @@ jobs:
             -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
             ./ ${{ secrets.AZURE_USER }}@${{ secrets.AZURE_HOST }}:${{ env.REPO_DIR }}/
 
-      - name: 🔧 Permisos de scripts
+      - name: Permisos de scripts
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
             ${{ secrets.AZURE_USER }}@${{ secrets.AZURE_HOST }} \
             "chmod +x ${{ env.REPO_DIR }}/scripts/*.sh \
              && chmod +x ${{ env.REPO_DIR }}/docker/postgres/init-multiple-dbs.sh"
 
-      - name: 🌱 Ejecutar bootstrap.sh en la VM
+      - name: Ejecutar bootstrap.sh en la VM
         # Inyecta las credenciales de Infisical solo durante ESTE step.
         # El script las persiste en ~/.bashrc del servidor.
-        # Próximos workflows (deploy.yml, update-service.yml) las leen del bashrc.
+        # Proximos workflows (deploy.yml, update-service.yml) las leen del bashrc.
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
             ${{ secrets.AZURE_USER }}@${{ secrets.AZURE_HOST }} \
@@ -98,7 +98,7 @@ jobs:
              INFISICAL_PROJECT_ID='${{ secrets.INFISICAL_PROJECT_ID }}' \
              bash ${{ env.REPO_DIR }}/scripts/bootstrap.sh"
 
-      - name: 🏗️ Setup Strapi (si no existe)
+      - name: Setup Strapi (si no existe)
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
             ${{ secrets.AZURE_USER }}@${{ secrets.AZURE_HOST }} << 'ENDSSH'
@@ -112,25 +112,25 @@ jobs:
             fi
           ENDSSH
 
-      - name: ✅ Bootstrap completado
+      - name: Bootstrap completado
         if: success()
         run: |
-          echo "### 🌱 Bootstrap exitoso" >> $GITHUB_STEP_SUMMARY
+          echo "### Bootstrap exitoso" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "La VM está provisionada y lista. Las credenciales de Infisical" >> $GITHUB_STEP_SUMMARY
+          echo "La VM esta provisionada y lista. Las credenciales de Infisical" >> $GITHUB_STEP_SUMMARY
           echo "viven ahora en \`~/.bashrc\` del servidor." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Siguientes pasos:**" >> $GITHUB_STEP_SUMMARY
-          echo "1. Ejecutar el workflow \`🚀 Deploy Tree Pruning\` (action: \`deploy\`)" >> $GITHUB_STEP_SUMMARY
+          echo "1. Ejecutar el workflow \`Deploy Tree Pruning\` (action: \`deploy\`)" >> $GITHUB_STEP_SUMMARY
           echo "   para levantar los contenedores." >> $GITHUB_STEP_SUMMARY
           echo "2. Si Kong falla con error de auth en pg_hba, ejecutar el deploy" >> $GITHUB_STEP_SUMMARY
           echo "   con action: \`fix-kong\` una sola vez." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "A partir de aquí, \`deploy.yml\` no requiere los secrets de" >> $GITHUB_STEP_SUMMARY
-          echo "Infisical en GitHub — solo \`AZURE_HOST\`, \`AZURE_USER\` y \`AZURE_SSH_KEY\`." >> $GITHUB_STEP_SUMMARY
+          echo "A partir de aqui, \`deploy.yml\` no requiere los secrets de" >> $GITHUB_STEP_SUMMARY
+          echo "Infisical en GitHub -- solo \`AZURE_HOST\`, \`AZURE_USER\` y \`AZURE_SSH_KEY\`." >> $GITHUB_STEP_SUMMARY
 
-      - name: ❌ Bootstrap falló
+      - name: Bootstrap fallo
         if: failure()
         run: |
-          echo "### ❌ Bootstrap falló" >> $GITHUB_STEP_SUMMARY
-          echo "Revisar los logs del step que falló y reintentar." >> $GITHUB_STEP_SUMMARY
+          echo "### Bootstrap fallo" >> $GITHUB_STEP_SUMMARY
+          echo "Revisar los logs del step que fallo y reintentar." >> $GITHUB_STEP_SUMMARY

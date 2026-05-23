@@ -17,7 +17,7 @@ scrape_configs:
 
   # Backend corriendo en local (puerto 8081 del host vía gateway de la red docker).
   # Útil cuando un dev levanta su backend localmente y quiere ver métricas en Grafana.
-  # Si no hay nada escuchando, Prometheus reporta el target como DOWN — no afecta al resto.
+  # Si no hay nada escuchando, Prometheus reporta el target como DOWN -- no afecta al resto.
   - job_name: "treepruning-backend-local"
     metrics_path: "/actuator/prometheus"
     scrape_interval: 15s
@@ -31,7 +31,7 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # Traefik (deshabilitado — el traefik.yml actual no expone /metrics).
+  # Traefik (deshabilitado -- el traefik.yml actual no expone /metrics).
   # Para habilitarlo: añadir `metrics: { prometheus: { entryPoint: traefik } }`
   # al traefik.yml y exponer puerto 8082.
   # - job_name: "traefik"

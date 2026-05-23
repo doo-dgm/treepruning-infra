@@ -1,15 +1,15 @@
-# Defensa contra .env accidentales — TODOS los secretos viven en Infisical.
+# Defensa contra .env accidentales -- TODOS los secretos viven en Infisical.
 # No usamos archivos .env en ningún ambiente; los workflows usan
 # `infisical run -- docker compose up` que inyecta las vars en runtime.
 .env
 .env.*
 
-# Secretos sueltos — NUNCA commitear
+# Secretos sueltos -- NUNCA commitear
 *.pem
 *.key
 acme.json
 
-# Certificados Let's Encrypt — generados por Traefik en runtime, persistentes
+# Certificados Let's Encrypt -- generados por Traefik en runtime, persistentes
 # Excluidos del rsync --delete del workflow (ver .github/workflows/deploy.yml)
 docker/traefik/letsencrypt/
 
@@ -17,7 +17,7 @@ docker/traefik/letsencrypt/
 # Se genera automáticamente por bootstrap.sh
 infisical.json
 
-# Strapi — el proyecto se genera en el servidor, no se versiona completo
+# Strapi -- el proyecto se genera en el servidor, no se versiona completo
 strapi-app/
 strapi-app/node_modules/
 strapi-app/.cache/

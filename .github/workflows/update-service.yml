@@ -1,4 +1,4 @@
-name: Actualizar servicio de aplicación
+name: Actualizar servicio de aplicacion
 
 on:
   repository_dispatch:
@@ -25,44 +25,78 @@ jobs:
         run: |
           SERVICE="${{ github.event.client_payload.service }}"
 
+          # IMPORTANTE: -e en SSH para propagar exit codes del script remoto al runner.
+          # set -euo pipefail dentro hace que cualquier comando fallido aborte.
           ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
-            ${{ secrets.AZURE_USER }}@${{ secrets.AZURE_HOST }} << ENDSSH
-            set -a; source ~/.bashrc; set +a
-            TP_DIR="\${TP_REPO_DIR:-\$HOME/tree-pruning}"
-            cd \$TP_DIR
+            ${{ secrets.AZURE_USER }}@${{ secrets.AZURE_HOST }} bash -se << ENDSSH
+            set -euo pipefail
+            TP_DIR="\$HOME/tree-pruning"
+            cd "\$TP_DIR"
 
-            echo "[UPDATE] Actualizando $SERVICE..."
+            # ----- Cargar credenciales sin depender de bashrc interactivo -----
+            # El bashrc estandar de Ubuntu corta su ejecucion si el shell no es
+            # interactivo (case \$- in *i*) ;; *) return), por eso extraemos las
+            # vars directo de los archivos donde viven.
 
-            # Login a GHCR usando credenciales desde Infisical (imágenes privadas).
-            # Si GHCR_USER / GHCR_TOKEN no están en Infisical, se omite (imágenes públicas).
+            # INFISICAL_PROJECT_ID vive en infisical.json (workspaceId)
+            INFISICAL_PROJECT_ID=\$(grep -oP '"workspaceId"\s*:\s*"\K[^"]+' "\$TP_DIR/infisical.json" 2>/dev/null || true)
+            if [[ -z "\$INFISICAL_PROJECT_ID" ]]; then
+              echo "[ERROR] No se pudo leer workspaceId del infisical.json"
+              exit 1
+            fi
+
+            # INFISICAL_TOKEN vive en ~/.bashrc como export INFISICAL_TOKEN=...
+            INFISICAL_TOKEN=\$(grep -E '^export INFISICAL_TOKEN=' ~/.bashrc | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
+            if [[ -z "\$INFISICAL_TOKEN" ]]; then
+              echo "[ERROR] INFISICAL_TOKEN no esta en ~/.bashrc. Correr ci-renew-token.sh o el bootstrap."
+              exit 1
+            fi
+            export INFISICAL_PROJECT_ID INFISICAL_TOKEN
+
+            echo "[UPDATE] Actualizando $SERVICE (projectId=\${INFISICAL_PROJECT_ID:0:8}...)"
+
+            # Login a GHCR (imagenes privadas). Si GHCR_USER/GHCR_TOKEN no estan en Infisical, se omite.
             infisical run \
               --env=dev \
               --projectId=\$INFISICAL_PROJECT_ID \
               --token=\$INFISICAL_TOKEN \
-              -- bash -c 'if [[ -n "\${GHCR_USER:-}" && -n "\${GHCR_TOKEN:-}" ]]; then echo "\$GHCR_TOKEN" | docker login ghcr.io -u "\$GHCR_USER" --password-stdin; fi'
+              -- bash -c 'if [[ -n "\${GHCR_USER:-}" && -n "\${GHCR_TOKEN:-}" ]]; then echo "\$GHCR_TOKEN" | docker login ghcr.io -u "\$GHCR_USER" --password-stdin; else echo "[WARN] GHCR_USER/GHCR_TOKEN no definidos en Infisical; asumiendo package publico o login previo"; fi'
 
+            echo "[PULL] docker compose pull $SERVICE"
             infisical run \
               --env=dev \
               --projectId=\$INFISICAL_PROJECT_ID \
               --token=\$INFISICAL_TOKEN \
               -- docker compose pull $SERVICE
 
+            echo "[UP] docker compose up -d --no-deps $SERVICE"
             infisical run \
               --env=dev \
               --projectId=\$INFISICAL_PROJECT_ID \
               --token=\$INFISICAL_TOKEN \
               -- docker compose up -d --no-deps $SERVICE
 
-            echo "[OK] $SERVICE actualizado"
+            echo "[STATUS]"
             docker compose ps $SERVICE
+
+            # Verificacion final
+            STATE=\$(docker inspect -f '{{.State.Status}}' tp-$SERVICE 2>/dev/null || echo "missing")
+            if [[ "\$STATE" != "running" ]]; then
+              echo "[ERROR] El contenedor tp-$SERVICE quedo en estado: \$STATE"
+              echo "[LOGS ultimos 50]"
+              docker logs --tail=50 tp-$SERVICE 2>&1 || true
+              exit 1
+            fi
+
+            echo "[OK] $SERVICE actualizado y corriendo"
           ENDSSH
 
       - name: Resumen del deploy
         if: success()
         run: |
           SERVICE="${{ github.event.client_payload.service }}"
-          echo "### ✅ $SERVICE actualizado" >> $GITHUB_STEP_SUMMARY
+          echo "### [OK] $SERVICE actualizado" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Campo | Valor |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
@@ -73,5 +107,5 @@ jobs:
       - name: Resumen de fallo
         if: failure()
         run: |
-          echo "### ❌ Falló la actualización de ${{ github.event.client_payload.service }}" >> $GITHUB_STEP_SUMMARY
-          echo "Revisar los logs del step que falló." >> $GITHUB_STEP_SUMMARY
+          echo "### [FAIL] Fallo la actualizacion de ${{ github.event.client_payload.service }}" >> $GITHUB_STEP_SUMMARY
+          echo "Revisar los logs del step que fallo." >> $GITHUB_STEP_SUMMARY

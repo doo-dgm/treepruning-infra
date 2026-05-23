@@ -1,5 +1,5 @@
 # docker/traefik/dynamic/middlewares.yml
-# Configuración dinámica de Traefik — se recarga sin reiniciar el contenedor
+# Configuración dinámica de Traefik -- se recarga sin reiniciar el contenedor
 
 http:
   middlewares:

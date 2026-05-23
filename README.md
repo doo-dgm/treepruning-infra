@@ -1,7 +1,7 @@
-# 🌳 Tree Pruning — Infraestructura
+#  Tree Pruning -- Infraestructura
 
-Sistema de Gestión de Arbolado Urbano — Rionegro, Antioquia  
-**Azure VM** · **Docker Compose** · **Traefik** · **Infisical** · **GitHub Actions**
+Sistema de Gestión de Arbolado Urbano -- Rionegro, Antioquia  
+**Azure VM** - **Docker Compose** - **Traefik** - **Infisical** - **GitHub Actions**
 
 ---
 
@@ -9,134 +9,134 @@ Sistema de Gestión de Arbolado Urbano — Rionegro, Antioquia
 
 ```
 Internet
-  └── Cloudflare (WAF + CDN + DNS)
-        └── Azure VM: vm-treepruning (Standard_B4ms, Ubuntu 22.04)
+  +-- Cloudflare (WAF + CDN + DNS)
+        +-- Azure VM: vm-treepruning (Standard_B4ms, Ubuntu 22.04)
               Dominio: treepruning.org
-              │
-              └── Traefik v2.11 (SSL Let's Encrypt vía Cloudflare DNS)
-                    ├── treepruning.org         → tp-frontend
-                    ├── api.treepruning.org     → tp-kong :8000
-                    ├── auth.treepruning.org    → tp-keycloak :8080
-                    ├── cms.treepruning.org     → tp-strapi :1337
-                    ├── s3.treepruning.org      → tp-minio :9000
-                    ├── console.treepruning.org → tp-minio :9001
-                    ├── grafana.treepruning.org → tp-grafana :3000
-                    └── sonar.treepruning.org   → tp-sonarqube :9000
+              |
+              +-- Traefik v2.11 (SSL Let's Encrypt vía Cloudflare DNS)
+                    +-- treepruning.org         -> tp-frontend
+                    +-- api.treepruning.org     -> tp-kong :8000
+                    +-- auth.treepruning.org    -> tp-keycloak :8080
+                    +-- cms.treepruning.org     -> tp-strapi :1337
+                    +-- s3.treepruning.org      -> tp-minio :9000
+                    +-- console.treepruning.org -> tp-minio :9001
+                    +-- grafana.treepruning.org -> tp-grafana :3000
+                    +-- sonar.treepruning.org   -> tp-sonarqube :9000
 
-Servicios externos (SaaS — sin contenedor):
-  ├── Infisical          — gestión de secretos (reemplaza HashiCorp Vault)
-  ├── Firebase Cloud Messaging — notificaciones push
-  ├── Google Maps Platform     — mapas interactivos
-  ├── GitHub Actions           — CI/CD pipeline
-  └── Google reCAPTCHA v3      — validación anti-bot
+Servicios externos (SaaS -- sin contenedor):
+  +-- Infisical          -- gestión de secretos (reemplaza HashiCorp Vault)
+  +-- Firebase Cloud Messaging -- notificaciones push
+  +-- Google Maps Platform     -- mapas interactivos
+  +-- GitHub Actions           -- CI/CD pipeline
+  +-- Google reCAPTCHA v3      -- validación anti-bot
 ```
 
 ## Estructura del repositorio
 
 ```
 treepruning-infra/
-├── docker-compose.yml                    # Todos los servicios + labels Traefik
-├── infisical.json.example                # Plantilla — el real se genera en bootstrap
-├── .gitignore                            # Bloquea .env, .pem, *.key, acme.json
-├── .github/
-│   └── workflows/
-│       ├── bootstrap.yml                 # 🌱 Setup inicial (1 vez por VM nueva) ⭐
-│       ├── deploy.yml                    # 🚀 Deploy completo (push a main / manual)
-│       └── update-service.yml            # 🔄 Update incremental (dispatch desde back/front)
-├── docker/
-│   ├── postgres/
-│   │   └── init-multiple-dbs.sh         # Crea: kong, keycloak, strapi, sonarqube
-│   ├── prometheus/
-│   │   └── prometheus.yml
-│   ├── nginx/
-│   │   └── frontend.conf                # Config nginx (legacy, preservado)
-│   ├── traefik/
-│   │   ├── traefik.yml                  # Config estática (dashboard + ACME)
-│   │   ├── dynamic/
-│   │   │   └── middlewares.yml          # IP whitelist + security headers (opcional)
-│   │   └── letsencrypt/                 # Certificados — generados en runtime (ignored)
-│   └── config-repo/
-│       └── treepruning.yml              # Parámetros de Spring Cloud Config
-└── scripts/
-    ├── bootstrap.sh                      # Setup completo desde cero (lo llama bootstrap.yml)
-    ├── setup-strapi.sh                   # Genera strapi-app/ (solo 1ra vez)
-    ├── fix-kong.sh                       # Fix pg_hba.conf para Kong (solo 1ra vez)
-    ├── ci-renew-token.sh                 # Renueva token Infisical desde CI
-    └── renew-token.sh                    # Renueva token Infisical manualmente
++-- docker-compose.yml                    # Todos los servicios + labels Traefik
++-- infisical.json.example                # Plantilla -- el real se genera en bootstrap
++-- .gitignore                            # Bloquea .env, .pem, *.key, acme.json
++-- .github/
+|   +-- workflows/
+|       +-- bootstrap.yml                 #  Setup inicial (1 vez por VM nueva) 
+|       +-- deploy.yml                    #  Deploy completo (push a main / manual)
+|       +-- update-service.yml            #  Update incremental (dispatch desde back/front)
++-- docker/
+|   +-- postgres/
+|   |   +-- init-multiple-dbs.sh         # Crea: kong, keycloak, strapi, sonarqube
+|   +-- prometheus/
+|   |   +-- prometheus.yml
+|   +-- nginx/
+|   |   +-- frontend.conf                # Config nginx (legacy, preservado)
+|   +-- traefik/
+|   |   +-- traefik.yml                  # Config estática (dashboard + ACME)
+|   |   +-- dynamic/
+|   |   |   +-- middlewares.yml          # IP whitelist + security headers (opcional)
+|   |   +-- letsencrypt/                 # Certificados -- generados en runtime (ignored)
+|   +-- config-repo/
+|       +-- treepruning.yml              # Parámetros de Spring Cloud Config
++-- scripts/
+    +-- bootstrap.sh                      # Setup completo desde cero (lo llama bootstrap.yml)
+    +-- setup-strapi.sh                   # Genera strapi-app/ (solo 1ra vez)
+    +-- fix-kong.sh                       # Fix pg_hba.conf para Kong (solo 1ra vez)
+    +-- ci-renew-token.sh                 # Renueva token Infisical desde CI
+    +-- renew-token.sh                    # Renueva token Infisical manualmente
 ```
 
-> ⚠️ El archivo `infisical.json` NO se versiona — contiene el `workspaceId` (Project ID).  
+>  El archivo `infisical.json` NO se versiona -- contiene el `workspaceId` (Project ID).  
 > El pipeline lo genera automáticamente desde el secret `INFISICAL_PROJECT_ID`.
 
 ---
 
-## 🔐 Secretos — dónde vive cada uno
+##  Secretos -- dónde vive cada uno
 
 Este proyecto usa **dos fuentes de secretos** con responsabilidades distintas:
 
-### 1️⃣ GitHub Actions — Repository Secrets
-> **Settings → Secrets and variables → Actions → Repository secrets**
+### 1 GitHub Actions -- Repository Secrets
+> **Settings -> Secrets and variables -> Actions -> Repository secrets**
 
 Hay dos conjuntos de secrets, según qué workflow los usa:
 
-#### 🔁 Siempre requeridos (workflows: `deploy.yml`, `update-service.yml`)
+####  Siempre requeridos (workflows: `deploy.yml`, `update-service.yml`)
 | Secret | Valor |
 |--------|-------|
 | `AZURE_HOST` | IP pública de la VM |
 | `AZURE_USER` | `treepruning` |
 | `AZURE_SSH_KEY` | Contenido del archivo `.pem` de la VM |
 
-#### 🌱 Solo para bootstrap (workflow: `bootstrap.yml`, una sola vez por VM nueva)
+####  Solo para bootstrap (workflow: `bootstrap.yml`, una sola vez por VM nueva)
 | Secret | Cómo obtenerlo |
 |--------|----------------|
-| `INFISICAL_CLIENT_ID` | Machine Identity en Infisical → Universal Auth |
-| `INFISICAL_CLIENT_SECRET` | Machine Identity en Infisical → Universal Auth |
-| `INFISICAL_PROJECT_ID` | Infisical → Project Settings → Project ID |
+| `INFISICAL_CLIENT_ID` | Machine Identity en Infisical -> Universal Auth |
+| `INFISICAL_CLIENT_SECRET` | Machine Identity en Infisical -> Universal Auth |
+| `INFISICAL_PROJECT_ID` | Infisical -> Project Settings -> Project ID |
 
-> 💡 **Los secrets de Infisical solo se usan en `bootstrap.yml`**. Una vez ejecutado, viven en `~/.bashrc` de la VM y los workflows de deploy regulares no los necesitan en GitHub. Si decides borrarlos de GitHub después del bootstrap, los deploys regulares siguen funcionando.
+>  **Los secrets de Infisical solo se usan en `bootstrap.yml`**. Una vez ejecutado, viven en `~/.bashrc` de la VM y los workflows de deploy regulares no los necesitan en GitHub. Si decides borrarlos de GitHub después del bootstrap, los deploys regulares siguen funcionando.
 
 ---
 
-### 2️⃣ Infisical — Environment `dev`
-> **app.infisical.com → treepruning → dev**  
+### 2 Infisical -- Environment `dev`
+> **app.infisical.com -> treepruning -> dev**  
 > Son los secretos que se inyectan a Docker Compose en tiempo de ejecución. Ninguno vive en el repo ni en GitHub.
 
 | Secret en Infisical | Para qué | Estado |
 |---------------------|----------|--------|
-| `AZURE_HOST` | IP de la VM (referencia interna) | ✅ |
-| `AZURE_SSH_KEY` | Clave SSH (referencia interna) | ✅ |
-| `AZURE_USER` | Usuario SSH (referencia interna) | ✅ |
-| `CF_DNS_API_TOKEN` | Token Cloudflare para SSL automático con Let's Encrypt | ✅ |
-| `GOOGLE_CAPTCHA_V3` | Clave de Google reCAPTCHA v3 | ✅ |
-| `GRAFANA_PASSWORD` | Contraseña admin de Grafana | ✅ |
-| `KEYCLOAK_ADMIN_PASSWORD` | Contraseña admin de Keycloak | ✅ |
-| `KEYCLOAK_ADMIN_USER` | Usuario admin de Keycloak | ✅ |
-| `MINIO_ROOT_PASSWORD` | Contraseña root de MinIO | ✅ |
-| `MINIO_ROOT_USER` | Usuario root de MinIO | ✅ |
-| `POSTGRES_DB` | `treeprunning` | ✅ |
-| `POSTGRES_PASSWORD` | Contraseña de PostgreSQL | ✅ |
-| `POSTGRES_USER` | `postgres` | ✅ |
-| `REDIS_PASSWORD` | Contraseña de Redis | ✅ |
-| `SONARQUBE_ADMIN_PASSWORD` | Contraseña admin de SonarQube | ✅ |
-| `STRAPI_ADMIN_JWT_SECRET` | Secret JWT del panel admin de Strapi | ✅ |
-| `STRAPI_APP_KEYS` | `key1,key2,key3,key4` | ✅ |
-| `STRAPI_JWT_SECRET` | Secret JWT de la API de Strapi | ✅ |
-| `VAULT_TOKEN` | Token de acceso a Infisical (renovación automática) | ✅ |
-| `VITE_GOOGLE_MAPS_API_KEY` | API Key de Google Maps para el Frontend | ✅ |
+| `AZURE_HOST` | IP de la VM (referencia interna) |  |
+| `AZURE_SSH_KEY` | Clave SSH (referencia interna) |  |
+| `AZURE_USER` | Usuario SSH (referencia interna) |  |
+| `CF_DNS_API_TOKEN` | Token Cloudflare para SSL automático con Let's Encrypt |  |
+| `GOOGLE_CAPTCHA_V3` | Clave de Google reCAPTCHA v3 |  |
+| `GRAFANA_PASSWORD` | Contraseña admin de Grafana |  |
+| `KEYCLOAK_ADMIN_PASSWORD` | Contraseña admin de Keycloak |  |
+| `KEYCLOAK_ADMIN_USER` | Usuario admin de Keycloak |  |
+| `MINIO_ROOT_PASSWORD` | Contraseña root de MinIO |  |
+| `MINIO_ROOT_USER` | Usuario root de MinIO |  |
+| `POSTGRES_DB` | `treeprunning` |  |
+| `POSTGRES_PASSWORD` | Contraseña de PostgreSQL |  |
+| `POSTGRES_USER` | `postgres` |  |
+| `REDIS_PASSWORD` | Contraseña de Redis |  |
+| `SONARQUBE_ADMIN_PASSWORD` | Contraseña admin de SonarQube |  |
+| `STRAPI_ADMIN_JWT_SECRET` | Secret JWT del panel admin de Strapi |  |
+| `STRAPI_APP_KEYS` | `key1,key2,key3,key4` |  |
+| `STRAPI_JWT_SECRET` | Secret JWT de la API de Strapi |  |
+| `VAULT_TOKEN` | Token de acceso a Infisical (renovación automática) |  |
+| `VITE_GOOGLE_MAPS_API_KEY` | API Key de Google Maps para el Frontend |  |
 
-> ⚠️ Las contraseñas **no pueden contener `#`** — en archivos `.env` se interpreta como comentario y el valor se corta.
+>  Las contraseñas **no pueden contener `#`** -- en archivos `.env` se interpreta como comentario y el valor se corta.
 
-> ℹ️ Falta agregar también `ACME_EMAIL` en Infisical (email para notificaciones de Let's Encrypt).
+>  Falta agregar también `ACME_EMAIL` en Infisical (email para notificaciones de Let's Encrypt).
 
 ---
 
-## 🚀 Deploy desde cero — VM nueva
+##  Deploy desde cero -- VM nueva
 
 > 100% automatizado desde GitHub Actions. **No requiere conectarse a la VM por SSH manualmente**.
 
-### Paso 1 — DNS en Cloudflare
+### Paso 1 -- DNS en Cloudflare
 
-Crear registros tipo **A** apuntando a la IP de la VM con proxy activado (🟠):
+Crear registros tipo **A** apuntando a la IP de la VM con proxy activado ():
 
 | Subdominio | Servicio |
 |------------|---------|
@@ -153,16 +153,16 @@ Crear registros tipo **A** apuntando a la IP de la VM con proxy activado (🟠):
 | `sonar` | SonarQube |
 | `traefik` | Traefik Dashboard |
 
-### Paso 2 — Configurar los 6 GitHub Secrets
+### Paso 2 -- Configurar los 6 GitHub Secrets
 
-En el repositorio → **Settings → Secrets and variables → Actions → New repository secret**:
+En el repositorio -> **Settings -> Secrets and variables -> Actions -> New repository secret**:
 
 - `AZURE_HOST`, `AZURE_USER`, `AZURE_SSH_KEY` (siempre necesarios)
 - `INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`, `INFISICAL_PROJECT_ID` (solo para bootstrap)
 
-### Paso 3 — Ejecutar el workflow `🌱 Bootstrap servidor`
+### Paso 3 -- Ejecutar el workflow ` Bootstrap servidor`
 
-**Actions → 🌱 Bootstrap servidor (1 vez por VM nueva) → Run workflow**.  
+**Actions ->  Bootstrap servidor (1 vez por VM nueva) -> Run workflow**.  
 En el campo `confirm` escribir exactamente: **`BOOTSTRAP`**.
 
 El workflow:
@@ -172,46 +172,46 @@ El workflow:
 4. Hace login con la Machine Identity de Infisical y planta el token + credenciales en `~/.bashrc`.
 5. Crea el proyecto Strapi si no existe.
 
-A partir de aquí, **los workflows de deploy ya no necesitan los secrets de Infisical en GitHub** — los leen del bashrc del servidor.
+A partir de aquí, **los workflows de deploy ya no necesitan los secrets de Infisical en GitHub** -- los leen del bashrc del servidor.
 
-### Paso 4 — Primer deploy
+### Paso 4 -- Primer deploy
 
-**Actions → 🚀 Deploy Tree Pruning → Run workflow → action: `deploy`**.
+**Actions ->  Deploy Tree Pruning -> Run workflow -> action: `deploy`**.
 
 El pipeline sincroniza archivos, renueva el token de Infisical (si las credenciales están en bashrc), levanta los contenedores con `docker compose up -d` inyectando los secretos desde Infisical, y muestra el estado.
 
-### Paso 5 — Fix de Kong (solo la primera vez)
+### Paso 5 -- Fix de Kong (solo la primera vez)
 
-**Actions → 🚀 Deploy Tree Pruning → Run workflow → action: `fix-kong`**.
+**Actions ->  Deploy Tree Pruning -> Run workflow -> action: `fix-kong`**.
 
 > Kong tiene un problema histórico con `scram-sha-256` en pg_hba. El fix lo cambia a `md5` solo para Kong.
 
-### Paso 6 — (Opcional) Limpiar secrets de Infisical en GitHub
+### Paso 6 -- (Opcional) Limpiar secrets de Infisical en GitHub
 
-Una vez completado el bootstrap, puedes borrar `INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET` e `INFISICAL_PROJECT_ID` de GitHub Secrets — los deploys regulares no los necesitan.
+Una vez completado el bootstrap, puedes borrar `INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET` e `INFISICAL_PROJECT_ID` de GitHub Secrets -- los deploys regulares no los necesitan.
 
 > Recomendado mantenerlos si planeas levantar otro servidor en el futuro o re-provisionar este. Sin ellos no puedes correr `bootstrap.yml` de nuevo.
 
 ---
 
-## ⚡ Deploy en adelante
+##  Deploy en adelante
 
 Cada `push` a `main` dispara el deploy automáticamente.  
-Para operaciones puntuales, usar **Actions → Run workflow**:
+Para operaciones puntuales, usar **Actions -> Run workflow**:
 
 | Acción | Cuándo usarla |
 |--------|---------------|
 | `deploy` | Levantar / actualizar servicios (default en push) |
 | `restart` | Reiniciar todos los contenedores |
 | `down` | Apagar el stack |
-| `fix-kong` | Fix de pg_hba — **solo una vez** en servidor nuevo |
+| `fix-kong` | Fix de pg_hba -- **solo una vez** en servidor nuevo |
 | `renew-token` | Forzar renovación del token de Infisical |
 
-> El token de Infisical se renueva automáticamente en cada deploy — no es necesario renovarlo a mano.
+> El token de Infisical se renueva automáticamente en cada deploy -- no es necesario renovarlo a mano.
 
 ---
 
-## 📋 Comandos en la VM (día a día)
+##  Comandos en la VM (día a día)
 
 ```bash
 # Aliases disponibles después del bootstrap
@@ -235,27 +235,27 @@ docker stats --no-stream
 
 ---
 
-## 🌐 URLs de acceso
+##  URLs de acceso
 
 | Servicio | URL | Credenciales (en Infisical) |
 |----------|-----|-----------------------------|
-| Frontend | `https://treepruning.org` | — |
-| API Gateway | `https://api.treepruning.org` | — |
+| Frontend | `https://treepruning.org` | -- |
+| API Gateway | `https://api.treepruning.org` | -- |
 | Keycloak Admin | `https://auth.treepruning.org/admin` | `KEYCLOAK_ADMIN_USER` / `KEYCLOAK_ADMIN_PASSWORD` |
 | Strapi Admin | `https://cms.treepruning.org/admin` | Crear en primer acceso |
 | MinIO Consola | `https://console.treepruning.org` | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` |
-| MinIO API S3 | `https://s3.treepruning.org` | — |
+| MinIO API S3 | `https://s3.treepruning.org` | -- |
 | Grafana | `https://grafana.treepruning.org` | `admin` / `GRAFANA_PASSWORD` |
 | SonarQube | `https://sonar.treepruning.org` | `admin` / `SONARQUBE_ADMIN_PASSWORD` |
 
 ---
 
-## 🔒 Acceso a servicios internos (túnel SSH)
+##  Acceso a servicios internos (túnel SSH)
 
 PostgreSQL desde DBeaver / pgAdmin en tu PC:
 
 ```powershell
-# Windows — PowerShell (dejar la ventana abierta)
+# Windows -- PowerShell (dejar la ventana abierta)
 ssh -i "vm-treepruning_key.pem" -L 5432:localhost:5432 treepruning@TU_IP_VM -N
 # Conectar a: localhost:5432
 ```
@@ -269,43 +269,43 @@ ssh -i "vm-treepruning_key.pem" -L 8001:localhost:8001 treepruning@TU_IP_VM -N
 
 ---
 
-## ⚙️ Configuración post-instalación (solo 1ra vez)
+##  Configuración post-instalación (solo 1ra vez)
 
 ### MinIO
-1. `https://console.treepruning.org` → login con `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`
-2. **Buckets → Create Bucket** → nombre: `treepruning-evidencias`
+1. `https://console.treepruning.org` -> login con `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`
+2. **Buckets -> Create Bucket** -> nombre: `treepruning-evidencias`
 
 ### Grafana
-1. `https://grafana.treepruning.org` → login: `admin` / `GRAFANA_PASSWORD`
-2. **Connections → Data Sources → Add → Prometheus** → URL: `http://tp-prometheus:9090` → Save & Test
+1. `https://grafana.treepruning.org` -> login: `admin` / `GRAFANA_PASSWORD`
+2. **Connections -> Data Sources -> Add -> Prometheus** -> URL: `http://tp-prometheus:9090` -> Save & Test
 3. Importar dashboard ID `12900`
 
 ### Strapi
-1. `https://cms.treepruning.org/admin` → crear cuenta de administrador
-2. **Content-Type Builder** → crear colecciones:
+1. `https://cms.treepruning.org/admin` -> crear cuenta de administrador
+2. **Content-Type Builder** -> crear colecciones:
    - `NotificationTemplate`: `title`, `body`, `type` (enum: VENCIMIENTO_PQR, BLOQUEO_CUENTA, PODA_ASIGNADA, ALERTA_SISTEMA), `active` (boolean)
    - `SystemMessage`: `key` (único), `value`, `module` (INVENTARIO, PODAS, PQR, REPORTES, COMUN)
-3. **Settings → API Tokens → Create Token** → Full Access → copiar para el Backend
+3. **Settings -> API Tokens -> Create Token** -> Full Access -> copiar para el Backend
 
 ### Keycloak
-1. `https://auth.treepruning.org/admin` → login con `KEYCLOAK_ADMIN_USER` / `KEYCLOAK_ADMIN_PASSWORD`
-2. **Create Realm** → nombre: `treepruning`
-3. **Realm roles → Create role** × 3: `ADMINISTRADOR`, `ENCARGADO_CUADRILLA`, `CIUDADANO`
-4. **Clients → Create client** → `treepruning-backend` (bearer-only)
-5. **Clients → Create client** → `treepruning-frontend` (Redirect URI: `https://treepruning.org/*`)
-6. **Users → Create user** → asignar rol `ADMINISTRADOR` → Credentials → Set password
+1. `https://auth.treepruning.org/admin` -> login con `KEYCLOAK_ADMIN_USER` / `KEYCLOAK_ADMIN_PASSWORD`
+2. **Create Realm** -> nombre: `treepruning`
+3. **Realm roles -> Create role**  3: `ADMINISTRADOR`, `ENCARGADO_CUADRILLA`, `CIUDADANO`
+4. **Clients -> Create client** -> `treepruning-backend` (bearer-only)
+5. **Clients -> Create client** -> `treepruning-frontend` (Redirect URI: `https://treepruning.org/*`)
+6. **Users -> Create user** -> asignar rol `ADMINISTRADOR` -> Credentials -> Set password
 
 ### SonarQube
-1. `https://sonar.treepruning.org` → login: `admin` / `admin` → cambiar contraseña a `SONARQUBE_ADMIN_PASSWORD`
+1. `https://sonar.treepruning.org` -> login: `admin` / `admin` -> cambiar contraseña a `SONARQUBE_ADMIN_PASSWORD`
 
 ---
 
-## ⚠️ Notas importantes
+##  Notas importantes
 
-- Contraseñas **sin `#`** — se interpreta como comentario en archivos `.env` y el valor se corta
+- Contraseñas **sin `#`** -- se interpreta como comentario en archivos `.env` y el valor se corta
 - El token de Infisical **se renueva automáticamente** en cada deploy vía CI/CD
 - El fix de Kong (`fix-kong.sh`) **solo se aplica una vez** por servidor nuevo
 - `strapi-app/` se genera en el servidor y **no se versiona** completamente en Git
-- `infisical.json` **no se versiona** — se genera dinámicamente desde `INFISICAL_PROJECT_ID`
-- Los volúmenes Docker **persisten** entre `down`/`up` — los datos no se pierden al apagar
+- `infisical.json` **no se versiona** -- se genera dinámicamente desde `INFISICAL_PROJECT_ID`
+- Los volúmenes Docker **persisten** entre `down`/`up` -- los datos no se pierden al apagar
 - `AZURE_HOST`, `AZURE_SSH_KEY` y `AZURE_USER` están duplicados en Infisical como referencia, pero el pipeline los toma de GitHub Secrets para conectarse al servidor

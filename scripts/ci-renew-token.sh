@@ -59,7 +59,7 @@ sed -i '/^alias tp-/d' ~/.bashrc
 
 cat >> ~/.bashrc << EOF
 
-# ── Tree Pruning — actualizado por CI $(date '+%Y-%m-%d %H:%M') ──
+#  Tree Pruning -- actualizado por CI $(date '+%Y-%m-%d %H:%M') 
 export INFISICAL_CLIENT_ID=$INFISICAL_CLIENT_ID
 export INFISICAL_CLIENT_SECRET=$INFISICAL_CLIENT_SECRET
 export INFISICAL_PROJECT_ID=$INFISICAL_PROJECT_ID

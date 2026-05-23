@@ -1,8 +1,8 @@
 services:
 
-  # ─────────────────────────────────────────────
-  # POSTGRESQL — un solo contenedor, varias DBs
-  # ─────────────────────────────────────────────
+  # --------------------------------------------
+  # POSTGRESQL -- un solo contenedor, varias DBs
+  # --------------------------------------------
   pg1:
     image: postgres:16
     container_name: pg1
@@ -23,9 +23,9 @@ services:
       interval: 5s
       retries: 10
 
-  # ─────────────────────────────────────────────
-  # REDIS — cache + sessions
-  # ─────────────────────────────────────────────
+  # --------------------------------------------
+  # REDIS -- cache + sessions
+  # --------------------------------------------
   redis:
     image: redis:7-alpine
     container_name: tp-redis
@@ -41,9 +41,9 @@ services:
       timeout: 3s
       retries: 5
 
-  # ─────────────────────────────────────────────
-  # KEYCLOAK — IAM
-  # ─────────────────────────────────────────────
+  # --------------------------------------------
+  # KEYCLOAK -- IAM
+  # --------------------------------------------
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
     container_name: tp-keycloak
@@ -75,9 +75,9 @@ services:
       pg1:
         condition: service_healthy
 
-  # ─────────────────────────────────────────────
+  # --------------------------------------------
   # KONG MIGRATION (corre solo la 1ra vez)
-  # ─────────────────────────────────────────────
+  # --------------------------------------------
   kong-migration:
     image: kong:3.7-ubuntu
     container_name: tp-kong-migration
@@ -96,9 +96,9 @@ services:
         condition: service_healthy
     restart: on-failure
 
-  # ─────────────────────────────────────────────
-  # KONG — API Gateway
-  # ─────────────────────────────────────────────
+  # --------------------------------------------
+  # KONG -- API Gateway
+  # --------------------------------------------
   kong:
     image: kong:3.7-ubuntu
     container_name: tp-kong
@@ -129,9 +129,9 @@ services:
     depends_on:
       - kong-migration
 
-  # ─────────────────────────────────────────────
-  # MINIO — Object storage S3-compatible
-  # ─────────────────────────────────────────────
+  # --------------------------------------------
+  # MINIO -- Object storage S3-compatible
+  # --------------------------------------------
   minio:
     image: minio/minio:latest
     container_name: tp-minio
@@ -160,9 +160,9 @@ services:
     networks:
       - treepruning-net
 
-  # ─────────────────────────────────────────────
+  # --------------------------------------------
   # SPRING CLOUD CONFIG SERVER
-  # ─────────────────────────────────────────────
+  # --------------------------------------------
   config-server:
     image: hyness/spring-cloud-config-server:3.1.1-jre17
     container_name: tp-config-server
@@ -179,9 +179,9 @@ services:
     networks:
       - treepruning-net
 
-  # ─────────────────────────────────────────────
-  # STRAPI — CMS
-  # ─────────────────────────────────────────────
+  # --------------------------------------------
+  # STRAPI -- CMS
+  # --------------------------------------------
   strapi:
     image: node:20-alpine
     container_name: tp-strapi
@@ -217,9 +217,9 @@ services:
       pg1:
         condition: service_healthy
 
-  # ─────────────────────────────────────────────
-  # PROMETHEUS — metrics
-  # ─────────────────────────────────────────────
+  # --------------------------------------------
+  # PROMETHEUS -- metrics
+  # --------------------------------------------
   prometheus:
     image: prom/prometheus:latest
     container_name: tp-prometheus
@@ -233,9 +233,9 @@ services:
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
 
-  # ─────────────────────────────────────────────
-  # GRAFANA — dashboards
-  # ─────────────────────────────────────────────
+  # --------------------------------------------
+  # GRAFANA -- dashboards
+  # --------------------------------------------
   grafana:
     image: grafana/grafana:11.0.0
     container_name: tp-grafana
@@ -258,9 +258,9 @@ services:
     depends_on:
       - prometheus
 
-  # ─────────────────────────────────────────────
-  # SONARQUBE — code quality
-  # ─────────────────────────────────────────────
+  # --------------------------------------------
+  # SONARQUBE -- code quality
+  # --------------------------------------------
   sonarqube:
     image: sonarqube:10-community
     container_name: tp-sonarqube
@@ -290,9 +290,9 @@ services:
         soft: 65536
         hard: 65536
 
-  # ─────────────────────────────────────────────
-  # TRAEFIK — Reverse Proxy + SSL (Let's Encrypt)
-  # ─────────────────────────────────────────────
+  # --------------------------------------------
+  # TRAEFIK -- Reverse Proxy + SSL (Let's Encrypt)
+  # --------------------------------------------
   traefik:
     image: traefik:v2.11
     container_name: tp-traefik
@@ -315,8 +315,8 @@ services:
       - "traefik.http.routers.dashboard.tls.certresolver=cloudflare"
       - "traefik.http.routers.dashboard.service=api@internal"
 
-  # ─────────────────────────────────────────────
-  # BACKEND — Spring Boot (Producción)
+  # --------------------------------------------
+  # BACKEND -- Spring Boot (Producción)
   # Sin labels Traefik: acceso interno vía Kong
   #
   # Todas las credenciales de DB vienen de Infisical (inyectadas por
@@ -324,12 +324,12 @@ services:
   # porque es el nombre del servicio docker en la red interna.
   #
   # Infisical (env=dev) debe tener:
-  #   POSTGRES_DB=treepruning   ← la DB real con las tablas
-  #   POSTGRES_USER=postgres    ← super-user de pg1
-  #   POSTGRES_PASSWORD=<...>   ← contraseña real
+  #   POSTGRES_DB=treepruning   <- la DB real con las tablas
+  #   POSTGRES_USER=postgres    <- super-user de pg1
+  #   POSTGRES_PASSWORD=<...>   <- contraseña real
   #
-  # JPA_SCHEMA y JPA_DDL_AUTO son config de Spring (no secretos) → hardcoded.
-  # ─────────────────────────────────────────────
+  # JPA_SCHEMA y JPA_DDL_AUTO son config de Spring (no secretos) -> hardcoded.
+  # --------------------------------------------
   backend:
     image: ghcr.io/${GHCR_OWNER}/tree-pruning-backend:latest
     container_name: tp-backend
@@ -352,13 +352,13 @@ services:
     labels:
       - "traefik.enable=false"
 
-  # ─────────────────────────────────────────────
-  # BACKEND DEV — Spring Boot (Desarrollo)
+  # --------------------------------------------
+  # BACKEND DEV -- Spring Boot (Desarrollo)
   # Expuesto directo vía Traefik: api-dev.treepruning.org
   #
   # Misma conexión que prod (vars vienen de Infisical).
-  # JPA_DDL_AUTO=update → si una entidad nueva no tiene tabla, Hibernate la crea.
-  # ─────────────────────────────────────────────
+  # JPA_DDL_AUTO=update -> si una entidad nueva no tiene tabla, Hibernate la crea.
+  # --------------------------------------------
   backend-dev:
     image: ghcr.io/${GHCR_OWNER}/tree-pruning-backend:dev
     container_name: tp-backend-dev
@@ -385,10 +385,10 @@ services:
       - "traefik.http.routers.backend-dev.tls.certresolver=cloudflare"
       - "traefik.http.services.backend-dev.loadbalancer.server.port=8080"
 
-  # ─────────────────────────────────────────────
-  # FRONTEND — Vue/Vite servido por Nginx (Producción)
+  # --------------------------------------------
+  # FRONTEND -- Vue/Vite servido por Nginx (Producción)
   # Expuesto vía Traefik: treepruning.org
-  # ─────────────────────────────────────────────
+  # --------------------------------------------
   frontend:
     image: ghcr.io/${GHCR_OWNER}/tree-pruning-frontend:latest
     container_name: tp-frontend
@@ -402,10 +402,10 @@ services:
       - "traefik.http.routers.frontend.tls.certresolver=cloudflare"
       - "traefik.http.services.frontend.loadbalancer.server.port=80"
 
-  # ─────────────────────────────────────────────
-  # FRONTEND DEV — Vue/Vite (Desarrollo)
+  # --------------------------------------------
+  # FRONTEND DEV -- Vue/Vite (Desarrollo)
   # Expuesto vía Traefik: dev.treepruning.org
-  # ─────────────────────────────────────────────
+  # --------------------------------------------
   frontend-dev:
     image: ghcr.io/${GHCR_OWNER}/tree-pruning-frontend:dev
     container_name: tp-frontend-dev
