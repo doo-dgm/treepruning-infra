@@ -344,11 +344,19 @@ services:
       JPA_FORMAT_SQL: "false"
       JPA_SCHEMA: public
       SERVER_PORT: 8080
+      STORAGE_MINIO_ENDPOINT: http://tp-minio:9000
+      STORAGE_MINIO_BUCKET: ${STORAGE_MINIO_BUCKET}
+      STORAGE_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      STORAGE_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      STORAGE_MINIO_PRESIGNED_EXPIRY: "900"
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT}
     networks:
       - treepruning-net
     depends_on:
       pg1:
         condition: service_healthy
+      minio:
+        condition: service_started
     labels:
       - "traefik.enable=false"
 
@@ -373,11 +381,19 @@ services:
       JPA_FORMAT_SQL: "true"
       JPA_SCHEMA: public
       SERVER_PORT: 8080
+      STORAGE_MINIO_ENDPOINT: http://tp-minio:9000
+      STORAGE_MINIO_BUCKET: ${STORAGE_MINIO_BUCKET}
+      STORAGE_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      STORAGE_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      STORAGE_MINIO_PRESIGNED_EXPIRY: "900"
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT}
     networks:
       - treepruning-net
     depends_on:
       pg1:
         condition: service_healthy
+      minio:
+        condition: service_started
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.backend-dev.rule=Host(`api-dev.treepruning.org`)"

@@ -142,31 +142,55 @@ jobs:
             INFISICAL_TOKEN=\$(grep -E '^export INFISICAL_TOKEN=' ~/.bashrc | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
             export INFISICAL_PROJECT_ID INFISICAL_TOKEN
 
+            # Servicios "shared" (DB, IAM, gateways, observability, etc.) +
+            # los services prod (backend, frontend). Se levantan con env=prod.
+            # Los services *-dev se levantan con env=dev en una segunda pasada.
+            PROD_SERVICES="pg1 redis keycloak kong-migration kong minio config-server strapi prometheus grafana sonarqube traefik backend frontend"
+            DEV_SERVICES="backend-dev frontend-dev"
+
             case "$ACTION" in
               deploy)
                 echo "[DEPLOY] Login a GHCR (si las imagenes son privadas)..."
                 infisical run \
-                  --env=dev \
+                  --env=prod \
                   --projectId=\$INFISICAL_PROJECT_ID \
                   --token=\$INFISICAL_TOKEN \
                   -- bash -c 'if [[ -n "\${GHCR_USER:-}" && -n "\${GHCR_TOKEN:-}" ]]; then echo "\$GHCR_TOKEN" | docker login ghcr.io -u "\$GHCR_USER" --password-stdin; fi'
 
-                echo "[DEPLOY] Levantando servicios..."
+                echo "[DEPLOY] Levantando servicios prod + compartidos (env=prod)..."
+                infisical run \
+                  --env=prod \
+                  --projectId=\$INFISICAL_PROJECT_ID \
+                  --token=\$INFISICAL_TOKEN \
+                  -- docker compose up -d \$PROD_SERVICES
+
+                echo "[DEPLOY] Levantando servicios dev (env=dev)..."
                 infisical run \
                   --env=dev \
                   --projectId=\$INFISICAL_PROJECT_ID \
                   --token=\$INFISICAL_TOKEN \
-                  -- docker compose up -d --remove-orphans
+                  -- docker compose up -d \$DEV_SERVICES
+
+                # Limpieza de huérfanos (services que ya no existen en el compose).
+                docker compose up -d --remove-orphans --no-recreate \$PROD_SERVICES \$DEV_SERVICES >/dev/null 2>&1 || true
+
                 echo "[OK] docker compose up completado"
                 ;;
 
               restart)
-                echo "[RESTART] Reiniciando servicios..."
+                echo "[RESTART] Reiniciando servicios prod + compartidos (env=prod)..."
+                infisical run \
+                  --env=prod \
+                  --projectId=\$INFISICAL_PROJECT_ID \
+                  --token=\$INFISICAL_TOKEN \
+                  -- docker compose restart \$PROD_SERVICES
+
+                echo "[RESTART] Reiniciando servicios dev (env=dev)..."
                 infisical run \
                   --env=dev \
                   --projectId=\$INFISICAL_PROJECT_ID \
                   --token=\$INFISICAL_TOKEN \
-                  -- docker compose restart
+                  -- docker compose restart \$DEV_SERVICES
                 ;;
 
               down)

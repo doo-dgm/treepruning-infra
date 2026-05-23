@@ -34,9 +34,16 @@ jobs:
             TP_DIR="\$HOME/tree-pruning"
             cd "\$TP_DIR"
 
+            # Mapeo servicio -> environment Infisical.
+            # Convencion: los services *-dev usan env=dev; los demas usan env=prod.
+            case "$SERVICE" in
+              *-dev) INFISICAL_ENV=dev ;;
+              *)     INFISICAL_ENV=prod ;;
+            esac
+
             # ----- Cargar credenciales sin depender de bashrc interactivo -----
             # El bashrc estandar de Ubuntu corta su ejecucion si el shell no es
-            # interactivo (case \$- in *i*) ;; *) return), por eso extraemos las
+            # interactivo (case \$- en *i*) ;; *) return), por eso extraemos las
             # vars directo de los archivos donde viven.
 
             # INFISICAL_PROJECT_ID vive en infisical.json (workspaceId)
@@ -54,30 +61,30 @@ jobs:
             fi
             export INFISICAL_PROJECT_ID INFISICAL_TOKEN
 
-            echo "[UPDATE] Actualizando $SERVICE (projectId=\${INFISICAL_PROJECT_ID:0:8}...)"
+            echo "[UPDATE] Actualizando $SERVICE (env=\$INFISICAL_ENV, projectId=\${INFISICAL_PROJECT_ID:0:8}...)"
 
             # Login a GHCR (imagenes privadas). Si GHCR_USER/GHCR_TOKEN no estan en Infisical, se omite.
             infisical run \
-              --env=dev \
+              --env=\$INFISICAL_ENV \
               --projectId=\$INFISICAL_PROJECT_ID \
               --token=\$INFISICAL_TOKEN \
               -- bash -c 'if [[ -n "\${GHCR_USER:-}" && -n "\${GHCR_TOKEN:-}" ]]; then echo "\$GHCR_TOKEN" | docker login ghcr.io -u "\$GHCR_USER" --password-stdin; else echo "[WARN] GHCR_USER/GHCR_TOKEN no definidos en Infisical; asumiendo package publico o login previo"; fi'
 
             echo "[PULL] docker compose pull $SERVICE"
             infisical run \
-              --env=dev \
+              --env=\$INFISICAL_ENV \
               --projectId=\$INFISICAL_PROJECT_ID \
               --token=\$INFISICAL_TOKEN \
               -- docker compose pull $SERVICE
 
             echo "[UP] docker compose up -d --no-deps $SERVICE"
             infisical run \
-              --env=dev \
+              --env=\$INFISICAL_ENV \
               --projectId=\$INFISICAL_PROJECT_ID \
               --token=\$INFISICAL_TOKEN \
               -- docker compose up -d --no-deps $SERVICE
 
-            echo "[STATUS]"
+            echo "[OK] $SERVICE actualizado (env=\$INFISICAL_ENV)"
             docker compose ps $SERVICE
 
             # Verificacion final

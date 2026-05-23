@@ -14,8 +14,10 @@ Internet
               Dominio: treepruning.org
               |
               +-- Traefik v2.11 (SSL Let's Encrypt vía Cloudflare DNS)
-                    +-- treepruning.org         -> tp-frontend
-                    +-- api.treepruning.org     -> tp-kong :8000
+                    +-- treepruning.org         -> tp-frontend       (prod)
+                    +-- dev.treepruning.org     -> tp-frontend-dev   (dev)
+                    +-- api.treepruning.org     -> tp-kong :8000     (prod, vía Kong)
+                    +-- api-dev.treepruning.org -> tp-backend-dev :8080 (dev, directo)
                     +-- auth.treepruning.org    -> tp-keycloak :8080
                     +-- cms.treepruning.org     -> tp-strapi :1337
                     +-- s3.treepruning.org      -> tp-minio :9000
@@ -97,36 +99,52 @@ Hay dos conjuntos de secrets, según qué workflow los usa:
 
 ---
 
-### 2 Infisical -- Environment `dev`
-> **app.infisical.com -> treepruning -> dev**  
+### 2 Infisical -- Environments `dev` y `prod`
+> **app.infisical.com -> treepruning -> {dev | prod}**  
 > Son los secretos que se inyectan a Docker Compose en tiempo de ejecución. Ninguno vive en el repo ni en GitHub.
 
-| Secret en Infisical | Para qué | Estado |
-|---------------------|----------|--------|
-| `AZURE_HOST` | IP de la VM (referencia interna) |  |
-| `AZURE_SSH_KEY` | Clave SSH (referencia interna) |  |
-| `AZURE_USER` | Usuario SSH (referencia interna) |  |
-| `CF_DNS_API_TOKEN` | Token Cloudflare para SSL automático con Let's Encrypt |  |
-| `GOOGLE_CAPTCHA_V3` | Clave de Google reCAPTCHA v3 |  |
-| `GRAFANA_PASSWORD` | Contraseña admin de Grafana |  |
-| `KEYCLOAK_ADMIN_PASSWORD` | Contraseña admin de Keycloak |  |
-| `KEYCLOAK_ADMIN_USER` | Usuario admin de Keycloak |  |
-| `MINIO_ROOT_PASSWORD` | Contraseña root de MinIO |  |
-| `MINIO_ROOT_USER` | Usuario root de MinIO |  |
-| `POSTGRES_DB` | `treeprunning` |  |
-| `POSTGRES_PASSWORD` | Contraseña de PostgreSQL |  |
-| `POSTGRES_USER` | `postgres` |  |
-| `REDIS_PASSWORD` | Contraseña de Redis |  |
-| `SONARQUBE_ADMIN_PASSWORD` | Contraseña admin de SonarQube |  |
-| `STRAPI_ADMIN_JWT_SECRET` | Secret JWT del panel admin de Strapi |  |
-| `STRAPI_APP_KEYS` | `key1,key2,key3,key4` |  |
-| `STRAPI_JWT_SECRET` | Secret JWT de la API de Strapi |  |
-| `VAULT_TOKEN` | Token de acceso a Infisical (renovación automática) |  |
-| `VITE_GOOGLE_MAPS_API_KEY` | API Key de Google Maps para el Frontend |  |
+El proyecto usa **dos environments en paralelo** sobre la misma VM:
+- `dev` aplica a los servicios `backend-dev` y `frontend-dev`.
+- `prod` aplica a los servicios `backend`, `frontend` y a todos los servicios compartidos (pg1, redis, keycloak, kong, minio, strapi, etc.).
 
->  Las contraseñas **no pueden contener `#`** -- en archivos `.env` se interpreta como comentario y el valor se corta.
+La mayoría de los secretos son **iguales en ambos environments** (passwords, tokens, credenciales compartidas). Solo las variables que aíslan datos/entornos difieren:
 
->  Falta agregar también `ACME_EMAIL` en Infisical (email para notificaciones de Let's Encrypt).
+| Variable | Valor en `dev` | Valor en `prod` |
+|---|---|---|
+| `POSTGRES_DB` | `treepruning_dev` | `treepruning_prod` |
+| `STORAGE_MINIO_BUCKET` | `evidencias-dev` | `evidencias-prod` |
+| `APP_ENVIRONMENT` | `dev` | `prod` |
+
+#### Secretos comunes (idénticos en `dev` y `prod`)
+
+| Secret en Infisical | Para qué |
+|---------------------|----------|
+| `ACME_EMAIL` | Email para notificaciones de Let's Encrypt |
+| `AZURE_HOST` | IP de la VM (referencia interna) |
+| `AZURE_SSH_KEY` | Clave SSH (referencia interna) |
+| `AZURE_USER` | Usuario SSH (referencia interna) |
+| `CF_DNS_API_TOKEN` | Token Cloudflare para SSL automático con Let's Encrypt |
+| `GHCR_OWNER` | Propietario de los packages en GHCR |
+| `GHCR_TOKEN` | PAT de GitHub para `docker login ghcr.io` en la VM |
+| `GHCR_USER` | Usuario asociado al `GHCR_TOKEN` |
+| `GOOGLE_CAPTCHA_V3` | Clave de Google reCAPTCHA v3 |
+| `GRAFANA_PASSWORD` | Contraseña admin de Grafana |
+| `KEYCLOAK_ADMIN_PASSWORD` | Contraseña admin de Keycloak |
+| `KEYCLOAK_ADMIN_USER` | Usuario admin de Keycloak |
+| `MINIO_ROOT_PASSWORD` | Contraseña root de MinIO |
+| `MINIO_ROOT_USER` | Usuario root de MinIO |
+| `POSTGRES_PASSWORD` | Contraseña de PostgreSQL |
+| `POSTGRES_USER` | `postgres` |
+| `PUBLIC_URL` | URL pública del CMS (Strapi) |
+| `REDIS_PASSWORD` | Contraseña de Redis |
+| `SONARQUBE_ADMIN_PASSWORD` | Contraseña admin de SonarQube |
+| `STRAPI_ADMIN_JWT_SECRET` | Secret JWT del panel admin de Strapi |
+| `STRAPI_APP_KEYS` | `key1,key2,key3,key4` |
+| `STRAPI_JWT_SECRET` | Secret JWT de la API de Strapi |
+| `VAULT_TOKEN` | Token de acceso a Infisical (renovación automática) |
+| `VITE_GOOGLE_MAPS_API_KEY` | API Key de Google Maps para el Frontend |
+
+> Pasar de un environment a otro: el workflow `deploy.yml` levanta cada grupo de servicios con `infisical run --env=...`. Los servicios `*-dev` se levantan con `--env=dev`, todo lo demás con `--env=prod`. Ver sección _Separación prod/dev_ más abajo.
 
 ---
 
@@ -237,16 +255,44 @@ docker stats --no-stream
 
 ##  URLs de acceso
 
-| Servicio | URL | Credenciales (en Infisical) |
-|----------|-----|-----------------------------|
-| Frontend | `https://treepruning.org` | -- |
-| API Gateway | `https://api.treepruning.org` | -- |
-| Keycloak Admin | `https://auth.treepruning.org/admin` | `KEYCLOAK_ADMIN_USER` / `KEYCLOAK_ADMIN_PASSWORD` |
-| Strapi Admin | `https://cms.treepruning.org/admin` | Crear en primer acceso |
-| MinIO Consola | `https://console.treepruning.org` | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` |
-| MinIO API S3 | `https://s3.treepruning.org` | -- |
-| Grafana | `https://grafana.treepruning.org` | `admin` / `GRAFANA_PASSWORD` |
-| SonarQube | `https://sonar.treepruning.org` | `admin` / `SONARQUBE_ADMIN_PASSWORD` |
+| Servicio | URL | Environment | Credenciales (en Infisical) |
+|----------|-----|---|-----------------------------|
+| Frontend | `https://treepruning.org` | prod | -- |
+| Frontend Dev | `https://dev.treepruning.org` | dev | -- |
+| API Gateway (vía Kong) | `https://api.treepruning.org` | prod | -- |
+| Backend Dev (directo) | `https://api-dev.treepruning.org` | dev | -- |
+| Keycloak Admin | `https://auth.treepruning.org/admin` | shared | `KEYCLOAK_ADMIN_USER` / `KEYCLOAK_ADMIN_PASSWORD` |
+| Strapi Admin | `https://cms.treepruning.org/admin` | shared | Crear en primer acceso |
+| MinIO Consola | `https://console.treepruning.org` | shared | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` |
+| MinIO API S3 | `https://s3.treepruning.org` | shared | -- |
+| Grafana | `https://grafana.treepruning.org` | shared | `admin` / `GRAFANA_PASSWORD` |
+| SonarQube | `https://sonar.treepruning.org` | shared | `admin` / `SONARQUBE_ADMIN_PASSWORD` |
+
+---
+
+##  Separación prod/dev
+
+Tanto `prod` como `dev` corren en la **misma VM** y comparten infraestructura (pg1, redis, keycloak, kong, minio, strapi, etc.). El aislamiento se logra por:
+
+| Eje | prod | dev | Compartido |
+|---|---|---|---|
+| Container backend | `tp-backend` | `tp-backend-dev` | -- |
+| Container frontend | `tp-frontend` | `tp-frontend-dev` | -- |
+| Imagen Docker | `:latest` | `:dev` | -- |
+| Branch que dispara el build | `main` (en repos back/front) | `develop` (en repos back/front) | -- |
+| DB en pg1 | `treepruning_prod` | `treepruning_dev` | `keycloak`, `kong`, `strapi`, `sonarqube` |
+| Bucket MinIO | `evidencias-prod` | `evidencias-dev` | -- |
+| Env Infisical inyectado | `prod` | `dev` | -- |
+| Subdominio | `treepruning.org`, `api.treepruning.org` | `dev.treepruning.org`, `api-dev.treepruning.org` | resto (`auth`, `cms`, etc.) |
+
+#### Workflows
+
+| Workflow | Comportamiento |
+|---|---|
+| `deploy.yml` | Levanta `$PROD_SERVICES` con `--env=prod` y `$DEV_SERVICES` (`backend-dev`, `frontend-dev`) con `--env=dev` en dos pasadas. |
+| `update-service.yml` | Recibe `service` por dispatch. Si termina en `-dev` → `--env=dev`; si no → `--env=prod`. |
+
+> **No hay branch `develop` en `treepruning-infra`**. El infra se trabaja siempre sobre `main` (con feature branches puntuales vía PR para cambios riesgosos). La separación prod/dev en infra ocurre por env de Infisical, no por branch. Los repos `treepruning-backend` y `treepruning-frontend` sí pueden usar `develop` para disparar builds que produzcan imágenes `:dev`.
 
 ---
 
@@ -273,7 +319,8 @@ ssh -i "vm-treepruning_key.pem" -L 8001:localhost:8001 treepruning@TU_IP_VM -N
 
 ### MinIO
 1. `https://console.treepruning.org` -> login con `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`
-2. **Buckets -> Create Bucket** -> nombre: `treepruning-evidencias`
+2. **Buckets -> Create Bucket** -> nombres: `evidencias-prod` y `evidencias-dev` (uno por environment)
+3. Ambos buckets son **privados** -- el backend genera URLs prefirmadas on-demand (15 min) para servir las fotos
 
 ### Grafana
 1. `https://grafana.treepruning.org` -> login: `admin` / `GRAFANA_PASSWORD`
@@ -302,10 +349,13 @@ ssh -i "vm-treepruning_key.pem" -L 8001:localhost:8001 treepruning@TU_IP_VM -N
 
 ##  Notas importantes
 
-- Contraseñas **sin `#`** -- se interpreta como comentario en archivos `.env` y el valor se corta
-- El token de Infisical **se renueva automáticamente** en cada deploy vía CI/CD
-- El fix de Kong (`fix-kong.sh`) **solo se aplica una vez** por servidor nuevo
-- `strapi-app/` se genera en el servidor y **no se versiona** completamente en Git
-- `infisical.json` **no se versiona** -- se genera dinámicamente desde `INFISICAL_PROJECT_ID`
-- Los volúmenes Docker **persisten** entre `down`/`up` -- los datos no se pierden al apagar
-- `AZURE_HOST`, `AZURE_SSH_KEY` y `AZURE_USER` están duplicados en Infisical como referencia, pero el pipeline los toma de GitHub Secrets para conectarse al servidor
+- **Aislamiento prod/dev**: pasa por env de Infisical + container separado + tag de imagen, **no por branch**. El compose y los workflows son únicos.
+- **Bucket privados**: `evidencias-prod` y `evidencias-dev` no son públicos; el backend emite presigned URLs (15 min) con `GET /api/v1/prunings/{id}/photo-url`.
+- **Contraseñas con `#`**: con Infisical CLI sí se permiten (se inyectan como env vars, no por `.env`). La advertencia histórica solo aplica si alguien escribiera un `.env` plano.
+- El token de Infisical **se renueva automáticamente** en cada deploy vía CI/CD.
+- El fix de Kong (`fix-kong.sh`) **solo se aplica una vez** por servidor nuevo.
+- `strapi-app/` se genera en el servidor y **no se versiona** completamente en Git.
+- `infisical.json` **no se versiona** -- se genera dinámicamente desde `INFISICAL_PROJECT_ID`.
+- Los volúmenes Docker **persisten** entre `down`/`up` -- los datos no se pierden al apagar.
+- `AZURE_HOST`, `AZURE_SSH_KEY` y `AZURE_USER` están duplicados en Infisical como referencia, pero el pipeline los toma de GitHub Secrets para conectarse al servidor.
+- **`tp-config-server` actualmente está en bucle de reinicio**: la imagen `hyness/spring-cloud-config-server:3.1.1-jre17` no es compatible con Spring Boot 4 (falta `SpringApplicationBuilder`). El backend funciona porque no depende del config-server en runtime (los valores vienen directo de Infisical). Pendiente: construir imagen custom basada en Spring Boot 4.x.
