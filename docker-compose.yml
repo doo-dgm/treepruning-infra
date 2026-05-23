@@ -319,15 +319,16 @@ services:
   # BACKEND — Spring Boot (Producción)
   # Sin labels Traefik: acceso interno vía Kong
   #
-  # Conexión a la DB ya existente en pg1:
-  #   - DB:     treepruning  (ya tiene las 20 tablas creadas en schema public)
-  #   - User:   postgres     (super-user, mismo que pg1)
-  #   - Schema: public       (donde están las tablas reales)
-  # Solo POSTGRES_PASSWORD viene de Infisical.
+  # Todas las credenciales de DB vienen de Infisical (inyectadas por
+  # `infisical run -- docker compose up`). POSTGRES_HOST es siempre `pg1`
+  # porque es el nombre del servicio docker en la red interna.
   #
-  # JPA_DDL_AUTO=validate → asume que las tablas existen y solo valida.
-  # Si en algún momento las entidades cambian, hay que aplicar la migración
-  # manualmente o cambiar temporalmente a `update`.
+  # Infisical (env=dev) debe tener:
+  #   POSTGRES_DB=treepruning   ← la DB real con las tablas
+  #   POSTGRES_USER=postgres    ← super-user de pg1
+  #   POSTGRES_PASSWORD=<...>   ← contraseña real
+  #
+  # JPA_SCHEMA y JPA_DDL_AUTO son config de Spring (no secretos) → hardcoded.
   # ─────────────────────────────────────────────
   backend:
     image: ghcr.io/${GHCR_OWNER}/tree-pruning-backend:latest
@@ -335,8 +336,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_HOST: pg1
-      POSTGRES_DB: treepruning
-      POSTGRES_USER: postgres
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       JPA_DDL_AUTO: validate
       JPA_SHOW_SQL: "false"
@@ -355,7 +356,7 @@ services:
   # BACKEND DEV — Spring Boot (Desarrollo)
   # Expuesto directo vía Traefik: api-dev.treepruning.org
   #
-  # Misma DB que prod (treepruning, schema public).
+  # Misma conexión que prod (vars vienen de Infisical).
   # JPA_DDL_AUTO=update → si una entidad nueva no tiene tabla, Hibernate la crea.
   # ─────────────────────────────────────────────
   backend-dev:
@@ -364,8 +365,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_HOST: pg1
-      POSTGRES_DB: treepruning
-      POSTGRES_USER: postgres
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       JPA_DDL_AUTO: update
       JPA_SHOW_SQL: "true"
