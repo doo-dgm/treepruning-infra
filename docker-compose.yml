@@ -372,7 +372,7 @@ services:
   # SONARQUBE -- code quality
   # --------------------------------------------
   sonarqube:
-    image: sonarqube:10-community
+    image: sonarqube:26.5.0.122743-community
     container_name: tp-sonarqube
     labels:
       - "traefik.enable=true"
