@@ -465,6 +465,10 @@ services:
       STORAGE_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       STORAGE_MINIO_PRESIGNED_EXPIRY: "900"
       APP_ENVIRONMENT: ${APP_ENVIRONMENT}
+      STRAPI_URL: http://tp-strapi:1337
+      STRAPI_API_TOKEN: ${STRAPI_API_TOKEN}
+      REDIS_HOST: tp-redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     networks:
       - treepruning-net
     depends_on:
@@ -472,6 +476,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+      redis:
+        condition: service_healthy
     labels:
       - "traefik.enable=false"
     healthcheck:
@@ -510,6 +516,10 @@ services:
       STORAGE_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       STORAGE_MINIO_PRESIGNED_EXPIRY: "900"
       APP_ENVIRONMENT: ${APP_ENVIRONMENT}
+      STRAPI_URL: http://tp-strapi:1337
+      STRAPI_API_TOKEN: ${STRAPI_API_TOKEN}
+      REDIS_HOST: tp-redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     networks:
       - treepruning-net
     depends_on:
@@ -517,6 +527,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+      redis:
+        condition: service_healthy
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.backend-dev.rule=Host(`api-dev.treepruning.org`)"
