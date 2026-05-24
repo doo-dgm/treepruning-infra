@@ -180,7 +180,7 @@ services:
       - treepruning-net
 
   # --------------------------------------------
-  # STRAPI -- CMS
+  # STRAPI -- CMS / Catálogo de parámetros
   # --------------------------------------------
   strapi:
     image: node:20-alpine
@@ -218,6 +218,38 @@ services:
         condition: service_healthy
 
   # --------------------------------------------
+  # LOKI -- agregación de logs
+  # --------------------------------------------
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: tp-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki_data:/loki
+    networks:
+      - treepruning-net
+    command: -config.file=/etc/loki/local-config.yaml
+
+  # --------------------------------------------
+  # PROMTAIL -- recolector de logs Docker
+  # --------------------------------------------
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: tp-promtail
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./docker/promtail/promtail.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - treepruning-net
+    depends_on:
+      - loki
+
+  # --------------------------------------------
   # PROMETHEUS -- metrics
   # --------------------------------------------
   prometheus:
@@ -234,7 +266,7 @@ services:
       - "--config.file=/etc/prometheus/prometheus.yml"
 
   # --------------------------------------------
-  # GRAFANA -- dashboards
+  # GRAFANA -- dashboards (métricas + logs)
   # --------------------------------------------
   grafana:
     image: grafana/grafana:11.0.0
@@ -257,6 +289,7 @@ services:
       - treepruning-net
     depends_on:
       - prometheus
+      - loki
 
   # --------------------------------------------
   # SONARQUBE -- code quality
@@ -318,17 +351,6 @@ services:
   # --------------------------------------------
   # BACKEND -- Spring Boot (Producción)
   # Sin labels Traefik: acceso interno vía Kong
-  #
-  # Todas las credenciales de DB vienen de Infisical (inyectadas por
-  # `infisical run -- docker compose up`). POSTGRES_HOST es siempre `pg1`
-  # porque es el nombre del servicio docker en la red interna.
-  #
-  # Infisical (env=dev) debe tener:
-  #   POSTGRES_DB=treepruning   <- la DB real con las tablas
-  #   POSTGRES_USER=postgres    <- super-user de pg1
-  #   POSTGRES_PASSWORD=<...>   <- contraseña real
-  #
-  # JPA_SCHEMA y JPA_DDL_AUTO son config de Spring (no secretos) -> hardcoded.
   # --------------------------------------------
   backend:
     image: ghcr.io/${GHCR_OWNER}/tree-pruning-backend:latest
@@ -363,9 +385,6 @@ services:
   # --------------------------------------------
   # BACKEND DEV -- Spring Boot (Desarrollo)
   # Expuesto directo vía Traefik: api-dev.treepruning.org
-  #
-  # Misma conexión que prod (vars vienen de Infisical).
-  # JPA_DDL_AUTO=update -> si una entidad nueva no tiene tabla, Hibernate la crea.
   # --------------------------------------------
   backend-dev:
     image: ghcr.io/${GHCR_OWNER}/tree-pruning-backend:dev
@@ -403,7 +422,6 @@ services:
 
   # --------------------------------------------
   # FRONTEND -- Vue/Vite servido por Nginx (Producción)
-  # Expuesto vía Traefik: treepruning.org
   # --------------------------------------------
   frontend:
     image: ghcr.io/${GHCR_OWNER}/tree-pruning-frontend:latest
@@ -420,7 +438,6 @@ services:
 
   # --------------------------------------------
   # FRONTEND DEV -- Vue/Vite (Desarrollo)
-  # Expuesto vía Traefik: dev.treepruning.org
   # --------------------------------------------
   frontend-dev:
     image: ghcr.io/${GHCR_OWNER}/tree-pruning-frontend:dev
@@ -443,5 +460,6 @@ volumes:
   pg1_pgdata:
   minio_data:
   grafana_data:
+  loki_data:
   sonarqube_data:
   sonarqube_logs:
