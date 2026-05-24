@@ -1,0 +1,41 @@
+# Promtail 2.9.x config. Descubre los containers Docker via /var/run/docker.sock
+# y envia sus logs a Loki. Hasta ahora el container corria con una config
+# implicita porque el archivo no existia; aqui lo dejamos explicito y versionado.
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://tp-loki:3100/loki/api/v1/push
+    # Backoff agresivo cuando Loki rechaza por rate limit.
+    backoff_config:
+      min_period: 500ms
+      max_period: 5m
+      max_retries: 10
+    # Limita el tama;o del batch para no disparar 429.
+    batchwait: 1s
+    batchsize: 1048576  # 1 MiB
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      # Toma el nombre del container (sin slash inicial) como label.
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.+)'
+        target_label: 'container'
+      # Toma el image name del container.
+      - source_labels: ['__meta_docker_container_log_stream']
+        target_label: 'stream'
+      # Labels utiles del docker compose project / service.
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: 'compose_project'
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'compose_service'

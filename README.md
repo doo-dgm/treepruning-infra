@@ -358,4 +358,4 @@ ssh -i "vm-treepruning_key.pem" -L 8001:localhost:8001 treepruning@TU_IP_VM -N
 - `infisical.json` **no se versiona** -- se genera dinámicamente desde `INFISICAL_PROJECT_ID`.
 - Los volúmenes Docker **persisten** entre `down`/`up` -- los datos no se pierden al apagar.
 - `AZURE_HOST`, `AZURE_SSH_KEY` y `AZURE_USER` están duplicados en Infisical como referencia, pero el pipeline los toma de GitHub Secrets para conectarse al servidor.
-- **`tp-config-server` actualmente está en bucle de reinicio**: la imagen `hyness/spring-cloud-config-server:3.1.1-jre17` no es compatible con Spring Boot 4 (falta `SpringApplicationBuilder`). El backend funciona porque no depende del config-server en runtime (los valores vienen directo de Infisical). Pendiente: construir imagen custom basada en Spring Boot 4.x.
+- **`tp-config-server`**: usa la imagen `hyness/spring-cloud-config-server:5.0.0` (Spring Boot 3, JDK 17.0.17). La imagen 3.1.1-jre17 anterior tenia un bug del JDK con cgroup v2 (`NullPointerException` en `CgroupInfo.getMountPoint()` al inicializar el `MBeanServer`); v5.0.0 lo resuelve. `mem_limit` debe ser >= 768MB porque el buildpack de Paketo lo requiere.

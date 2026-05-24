@@ -1,0 +1,71 @@
+# Loki 2.9.x config. Override sobre los defaults principalmente para subir el
+# ingestion rate limit (default 4 MB/s nos genera 429 con el volumen de logs
+# que tienen 17 containers en arranque o bajo carga).
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9095
+  log_level: warn
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v11
+      index:
+        prefix: index_
+        period: 24h
+
+storage_config:
+  boltdb_shipper:
+    active_index_directory: /loki/index
+    cache_location: /loki/index_cache
+    shared_store: filesystem
+  filesystem:
+    directory: /loki/chunks
+
+limits_config:
+  # Rate limit por tenant: 64 MB/s sostenido, 128 MB de burst.
+  # Default era 4 MB/s -> bajo arranques de 17 containers daba HTTP 429.
+  ingestion_rate_mb: 64
+  ingestion_burst_size_mb: 128
+
+  # Retention: 7 dias. Suficiente para troubleshooting reciente.
+  retention_period: 168h
+
+  # Tama;o maximo de cada linea de log (algunos stack traces son largos).
+  max_line_size: 256kb
+  max_line_size_truncate: true
+
+  # Permite labels nuevos sin cap arbitrario (Promtail puede agregar varios).
+  max_label_value_length: 4096
+  max_label_name_length: 1024
+  max_label_names_per_series: 30
+
+compactor:
+  working_directory: /loki/compactor
+  shared_store: filesystem
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 50
+
+ruler:
+  alertmanager_url: http://localhost:9093
+
+analytics:
+  reporting_enabled: false

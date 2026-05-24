@@ -6,6 +6,9 @@ services:
   pg1:
     image: postgres:16
     container_name: pg1
+    restart: unless-stopped
+    mem_limit: 2g
+    mem_reservation: 512m
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -30,6 +33,10 @@ services:
     image: redis:7-alpine
     container_name: tp-redis
     restart: unless-stopped
+    # maxmemory en redis es para su propio cache; mem_limit del container es
+    # el techo total (incluye overhead y conexiones), por eso 768m > 512m.
+    mem_limit: 768m
+    mem_reservation: 256m
     command: redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 512mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
@@ -47,6 +54,10 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
     container_name: tp-keycloak
+    # Keycloak (Quarkus + JVM) tiene un cold-start memory spike alto;
+    # con 1.5GB era OOM-killed (exit 137). 2GB le da margen.
+    mem_limit: 2g
+    mem_reservation: 1g
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.keycloak.rule=Host(`auth.treepruning.org`)"
@@ -95,6 +106,7 @@ services:
       pg1:
         condition: service_healthy
     restart: on-failure
+    mem_limit: 512m
 
   # --------------------------------------------
   # KONG -- API Gateway
@@ -102,6 +114,8 @@ services:
   kong:
     image: kong:3.7-ubuntu
     container_name: tp-kong
+    mem_limit: 1g
+    mem_reservation: 512m
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.kong.rule=Host(`api.treepruning.org`)"
@@ -128,6 +142,12 @@ services:
       - treepruning-net
     depends_on:
       - kong-migration
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   # --------------------------------------------
   # MINIO -- Object storage S3-compatible
@@ -159,19 +179,36 @@ services:
       - minio_data:/data
     networks:
       - treepruning-net
+    mem_limit: 1g
+    mem_reservation: 512m
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   # --------------------------------------------
   # SPRING CLOUD CONFIG SERVER
   # --------------------------------------------
   config-server:
-    image: hyness/spring-cloud-config-server:3.1.1-jre17
+    # Antes: 3.1.1-jre17 (Spring Boot 2.6.3, Java 17.0.2). Tenia un bug del JDK
+    # con cgroup v2 (NullPointerException en CgroupInfo.getMountPoint()) que
+    # rompia la inicializacion del MBeanServer al crearse TomcatMetricsBinder.
+    # 5.0.0 trae Spring Boot 3.x + JDK actualizado donde el bug esta arreglado.
+    image: hyness/spring-cloud-config-server:5.0.0
     container_name: tp-config-server
-    mem_limit: 256m
-    mem_reservation: 128m
+    # El buildpack de Paketo (BellSoft Liberica) tiene un memory-calculator
+    # que con defaults exige ~660MB. Limit=768m + thread count reducido
+    # mantienen el footprint manejable para un servicio read-only.
+    mem_limit: 768m
+    mem_reservation: 384m
     restart: unless-stopped
     environment:
       SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS: file:///config
       SPRING_PROFILES_ACTIVE: native
+      BPL_JVM_THREAD_COUNT: "50"
+      BPL_JVM_HEAD_ROOM: "0"
     ports:
       - "8888:8888"
     volumes:
@@ -216,6 +253,17 @@ services:
     depends_on:
       pg1:
         condition: service_healthy
+    mem_limit: 1g
+    mem_reservation: 512m
+    healthcheck:
+      # busybox wget viene en node:20-alpine; /_health responde 204 No Content
+      # sin auth. Usamos 127.0.0.1 explicito porque Strapi 5 solo escucha en
+      # IPv4 (0.0.0.0:1337) y "localhost" resuelve a ::1 (IPv6) en alpine.
+      test: ["CMD-SHELL", "wget -qO- --tries=1 --timeout=3 http://127.0.0.1:1337/_health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
 
   # --------------------------------------------
   # LOKI -- agregación de logs
@@ -224,13 +272,24 @@ services:
     image: grafana/loki:2.9.0
     container_name: tp-loki
     restart: unless-stopped
+    mem_limit: 512m
+    mem_reservation: 256m
     ports:
       - "3100:3100"
     volumes:
       - loki_data:/loki
+      # Override del config para subir ingestion_rate_mb (default 4 MB/s
+      # genera HTTP 429 con el volumen de logs de 17 containers).
+      - ./docker/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
     networks:
       - treepruning-net
     command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- --tries=1 --timeout=3 http://localhost:3100/ready || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   # --------------------------------------------
   # PROMTAIL -- recolector de logs Docker
@@ -239,10 +298,12 @@ services:
     image: grafana/promtail:2.9.0
     container_name: tp-promtail
     restart: unless-stopped
+    mem_limit: 256m
+    mem_reservation: 128m
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - ./docker/promtail/promtail.yml:/etc/promtail/config.yml
+      - ./docker/promtail/promtail.yml:/etc/promtail/config.yml:ro
     command: -config.file=/etc/promtail/config.yml
     networks:
       - treepruning-net
@@ -256,6 +317,8 @@ services:
     image: prom/prometheus:latest
     container_name: tp-prometheus
     restart: unless-stopped
+    mem_limit: 1g
+    mem_reservation: 512m
     ports:
       - "9090:9090"
     volumes:
@@ -264,6 +327,12 @@ services:
       - treepruning-net
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- --tries=1 --timeout=3 http://localhost:9090/-/healthy >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   # --------------------------------------------
   # GRAFANA -- dashboards (métricas + logs)
@@ -278,6 +347,8 @@ services:
       - "traefik.http.routers.grafana.tls.certresolver=cloudflare"
       - "traefik.http.services.grafana.loadbalancer.server.port=3000"
     restart: unless-stopped
+    mem_limit: 512m
+    mem_reservation: 256m
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
       GF_USERS_ALLOW_SIGN_UP: "false"
@@ -290,6 +361,12 @@ services:
     depends_on:
       - prometheus
       - loki
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:3000/api/health | grep -q '\"database\": \"ok\"' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   # --------------------------------------------
   # SONARQUBE -- code quality
@@ -304,6 +381,10 @@ services:
       - "traefik.http.routers.sonarqube.tls.certresolver=cloudflare"
       - "traefik.http.services.sonarqube.loadbalancer.server.port=9000"
     restart: unless-stopped
+    # SonarQube es pesado (Elasticsearch embedded + Java app). 3g cap deja
+    # margen; ya consume ~2g en idle.
+    mem_limit: 3g
+    mem_reservation: 1500m
     environment:
       SONAR_JDBC_URL: jdbc:postgresql://pg1:5432/sonarqube
       SONAR_JDBC_USERNAME: ${POSTGRES_USER}
@@ -322,6 +403,14 @@ services:
       nofile:
         soft: 65536
         hard: 65536
+    healthcheck:
+      # SonarQube tarda 1-2 min en arrancar (Elasticsearch). start_period
+      # generoso evita marcarlo unhealthy durante el warm-up.
+      test: ["CMD-SHELL", "curl -fs http://localhost:9000/api/system/status | grep -qE '\"status\":\"(UP|DB_MIGRATION_NEEDED)\"' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
 
   # --------------------------------------------
   # TRAEFIK -- Reverse Proxy + SSL (Let's Encrypt)
@@ -330,6 +419,8 @@ services:
     image: traefik:v2.11
     container_name: tp-traefik
     restart: unless-stopped
+    mem_limit: 512m
+    mem_reservation: 128m
     environment:
       CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}
     ports:
@@ -356,6 +447,8 @@ services:
     image: ghcr.io/${GHCR_OWNER}/tree-pruning-backend:latest
     container_name: tp-backend
     restart: unless-stopped
+    mem_limit: 1500m
+    mem_reservation: 768m
     environment:
       POSTGRES_HOST: pg1
       POSTGRES_DB: ${POSTGRES_DB}
@@ -381,6 +474,15 @@ services:
         condition: service_started
     labels:
       - "traefik.enable=false"
+    healthcheck:
+      # La imagen eclipse-temurin no trae curl/wget; usamos bash /dev/tcp como
+      # TCP probe. Es liveness, no readiness: solo verifica que el puerto este
+      # aceptando conexiones (Spring puede tardar 30-60s en estar UP).
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8080' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
 
   # --------------------------------------------
   # BACKEND DEV -- Spring Boot (Desarrollo)
@@ -390,6 +492,8 @@ services:
     image: ghcr.io/${GHCR_OWNER}/tree-pruning-backend:dev
     container_name: tp-backend-dev
     restart: unless-stopped
+    mem_limit: 1500m
+    mem_reservation: 768m
     environment:
       POSTGRES_HOST: pg1
       POSTGRES_DB: ${POSTGRES_DB}
@@ -419,6 +523,12 @@ services:
       - "traefik.http.routers.backend-dev.entrypoints=websecure"
       - "traefik.http.routers.backend-dev.tls.certresolver=cloudflare"
       - "traefik.http.services.backend-dev.loadbalancer.server.port=8080"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8080' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
 
   # --------------------------------------------
   # FRONTEND -- Vue/Vite servido por Nginx (Producción)
@@ -427,6 +537,8 @@ services:
     image: ghcr.io/${GHCR_OWNER}/treepruning-frontend:latest
     container_name: tp-frontend
     restart: unless-stopped
+    mem_limit: 256m
+    mem_reservation: 64m
     networks:
       - treepruning-net
     labels:
@@ -435,6 +547,12 @@ services:
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls.certresolver=cloudflare"
       - "traefik.http.services.frontend.loadbalancer.server.port=80"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # --------------------------------------------
   # FRONTEND DEV -- Vue/Vite (Desarrollo)
@@ -443,6 +561,8 @@ services:
     image: ghcr.io/${GHCR_OWNER}/treepruning-frontend:dev
     container_name: tp-frontend-dev
     restart: unless-stopped
+    mem_limit: 256m
+    mem_reservation: 64m
     networks:
       - treepruning-net
     labels:
@@ -451,6 +571,12 @@ services:
       - "traefik.http.routers.frontend-dev.entrypoints=websecure"
       - "traefik.http.routers.frontend-dev.tls.certresolver=cloudflare"
       - "traefik.http.services.frontend-dev.loadbalancer.server.port=80"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 networks:
   treepruning-net:
