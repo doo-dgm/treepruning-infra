@@ -164,14 +164,39 @@ jobs:
                   --token=\$INFISICAL_TOKEN \
                   -- docker compose up -d \$PROD_SERVICES
 
-                echo "[DEPLOY] Levantando servicios dev (env=dev)..."
-                infisical run \
-                  --env=dev \
-                  --projectId=\$INFISICAL_PROJECT_ID \
-                  --token=\$INFISICAL_TOKEN \
-                  -- docker compose up -d \$DEV_SERVICES
+                # Verifica que cada imagen :dev exista en GHCR antes de intentar
+                # levantarla. Sin esto, si alguno de los repos de aplicacion
+                # todavia no ha construido su tag :dev (push a branch develop),
+                # el `compose up` aborta TODO el deploy con error 1.
+                echo "[DEPLOY] Verificando disponibilidad de imagenes :dev en GHCR..."
+                GHCR_OWNER_FALLBACK="\${GHCR_OWNER:-doo-dgm}"
+                AVAILABLE_DEV=""
+                for svc in \$DEV_SERVICES; do
+                  case "\$svc" in
+                    backend-dev)  img="ghcr.io/\$GHCR_OWNER_FALLBACK/tree-pruning-backend:dev" ;;
+                    frontend-dev) img="ghcr.io/\$GHCR_OWNER_FALLBACK/treepruning-frontend:dev" ;;
+                    *) echo "[WARN] Service '\$svc' no mapeado a imagen; se omite del check"; continue ;;
+                  esac
+                  if docker manifest inspect "\$img" >/dev/null 2>&1; then
+                    AVAILABLE_DEV="\$AVAILABLE_DEV \$svc"
+                    echo "  [OK]   \$svc -> \$img"
+                  else
+                    echo "  [SKIP] \$svc -> \$img no disponible (todavia no construido en branch develop)"
+                  fi
+                done
 
-                # Limpieza de huérfanos (services que ya no existen en el compose).
+                if [[ -n "\$AVAILABLE_DEV" ]]; then
+                  echo "[DEPLOY] Levantando servicios dev disponibles (env=dev):\$AVAILABLE_DEV"
+                  infisical run \
+                    --env=dev \
+                    --projectId=\$INFISICAL_PROJECT_ID \
+                    --token=\$INFISICAL_TOKEN \
+                    -- docker compose up -d \$AVAILABLE_DEV
+                else
+                  echo "[INFO] Ninguna imagen :dev disponible; servicios dev no se levantan en este deploy."
+                fi
+
+                # Limpieza de huerfanos (services que ya no existen en el compose).
                 docker compose up -d --remove-orphans --no-recreate \$PROD_SERVICES \$DEV_SERVICES >/dev/null 2>&1 || true
 
                 echo "[OK] docker compose up completado"
@@ -185,12 +210,25 @@ jobs:
                   --token=\$INFISICAL_TOKEN \
                   -- docker compose restart \$PROD_SERVICES
 
-                echo "[RESTART] Reiniciando servicios dev (env=dev)..."
-                infisical run \
-                  --env=dev \
-                  --projectId=\$INFISICAL_PROJECT_ID \
-                  --token=\$INFISICAL_TOKEN \
-                  -- docker compose restart \$DEV_SERVICES
+                # Solo reinicia los dev cuyo container exista (los repos
+                # podrian no haber construido :dev todavia).
+                RUNNING_DEV=""
+                for svc in \$DEV_SERVICES; do
+                  if docker compose ps --services --status running --status restarting --status exited 2>/dev/null | grep -qx "\$svc"; then
+                    RUNNING_DEV="\$RUNNING_DEV \$svc"
+                  else
+                    echo "[SKIP] \$svc: container no existe, se omite del restart"
+                  fi
+                done
+
+                if [[ -n "\$RUNNING_DEV" ]]; then
+                  echo "[RESTART] Reiniciando servicios dev (env=dev):\$RUNNING_DEV"
+                  infisical run \
+                    --env=dev \
+                    --projectId=\$INFISICAL_PROJECT_ID \
+                    --token=\$INFISICAL_TOKEN \
+                    -- docker compose restart \$RUNNING_DEV
+                fi
                 ;;
 
               down)

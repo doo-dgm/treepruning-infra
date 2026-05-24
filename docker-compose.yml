@@ -424,7 +424,7 @@ services:
   # FRONTEND -- Vue/Vite servido por Nginx (Producción)
   # --------------------------------------------
   frontend:
-    image: ghcr.io/${GHCR_OWNER}/tree-pruning-frontend:latest
+    image: ghcr.io/${GHCR_OWNER}/treepruning-frontend:latest
     container_name: tp-frontend
     restart: unless-stopped
     networks:
@@ -440,7 +440,7 @@ services:
   # FRONTEND DEV -- Vue/Vite (Desarrollo)
   # --------------------------------------------
   frontend-dev:
-    image: ghcr.io/${GHCR_OWNER}/tree-pruning-frontend:dev
+    image: ghcr.io/${GHCR_OWNER}/treepruning-frontend:dev
     container_name: tp-frontend-dev
     restart: unless-stopped
     networks:
