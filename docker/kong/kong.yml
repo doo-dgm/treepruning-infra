@@ -40,6 +40,8 @@ services:
             - Accept
             - Authorization
             - Content-Type
+          exposed_headers:
+            - Authorization
           credentials: true
           max_age: 3600
 
@@ -80,5 +82,7 @@ services:
             - Accept
             - Authorization
             - Content-Type
+          exposed_headers:
+            - Authorization
           credentials: true
           max_age: 3600
