@@ -174,7 +174,7 @@ services:
   # --------------------------------------------
   kong:
     image: kong:3.7-ubuntu
-    container_name: tp-kong
+    container_name: tp-kong1
     mem_limit: 1g
     mem_reservation: 512m
     labels:
