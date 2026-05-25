@@ -99,7 +99,7 @@ services:
   # después del primer arranque.
   # --------------------------------------------
   debezium:
-    image: debezium/connect:2.7
+    image: quay.io/debezium/connect:2.7
     container_name: tp-debezium
     restart: unless-stopped
     mem_limit: 1g
