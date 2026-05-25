@@ -593,6 +593,7 @@ services:
       STRAPI_API_TOKEN: ${STRAPI_API_TOKEN}
       REDIS_HOST: tp-redis
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DATABASE: 1
       KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI}
       # Kafka/Redpanda para listener de invalidación de caché CDC
       KAFKA_BOOTSTRAP_SERVERS: tp-redpanda:29092
