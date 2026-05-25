@@ -106,6 +106,8 @@ services:
       - "traefik.http.routers.kong-dev.entrypoints=websecure"
       - "traefik.http.routers.kong-dev.tls.certresolver=cloudflare"
       - "traefik.http.routers.kong-dev.priority=100"
+      - "traefik.http.routers.kong-prod.service=kong-svc"
+      - "traefik.http.routers.kong-dev.service=kong-svc"
       - "traefik.http.services.kong-dev.loadbalancer.server.port=8000"
     restart: unless-stopped
     environment:
