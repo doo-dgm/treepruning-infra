@@ -85,7 +85,7 @@ jobs:
               -- docker compose up -d --no-deps $SERVICE
 
             echo "[OK] $SERVICE actualizado (env=\$INFISICAL_ENV)"
-            docker compose ps $SERVICE
+            docker ps --filter "name=tp-$SERVICE" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
             # Verificacion final
             STATE=\$(docker inspect -f '{{.State.Status}}' tp-$SERVICE 2>/dev/null || echo "missing")
