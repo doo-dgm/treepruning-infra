@@ -2,6 +2,7 @@ services:
 
   # --------------------------------------------
   # POSTGRESQL -- un solo contenedor, varias DBs
+  # WAL level=logical requerido por Debezium CDC
   # --------------------------------------------
   pg1:
     image: postgres:16
@@ -14,6 +15,13 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    # wal_level=logical: habilita replicación lógica (necesario para Debezium).
+    # max_wal_senders / max_replication_slots: valores mínimos para 1 conector.
+    command: >
+      postgres
+      -c wal_level=logical
+      -c max_wal_senders=4
+      -c max_replication_slots=4
     volumes:
       - pg1_pgdata:/var/lib/postgresql/data
       - ./docker/postgres/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
@@ -47,6 +55,80 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+
+  # --------------------------------------------
+  # REDPANDA -- Message broker Kafka-compatible
+  # Usado por Debezium para publicar eventos CDC
+  # --------------------------------------------
+  redpanda:
+    image: redpandadata/redpanda:v23.3.21
+    container_name: tp-redpanda
+    restart: unless-stopped
+    mem_limit: 1g
+    mem_reservation: 512m
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=512M
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --node-id=0
+      # PLAINTEXT: comunicación interna entre containers (tp-redpanda:29092)
+      # OUTSIDE: acceso desde el host vía túnel SSH (localhost:9092)
+      - --kafka-addr=PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://tp-redpanda:29092,OUTSIDE://localhost:9092
+    ports:
+      - "9092:9092"
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    networks:
+      - treepruning-net
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "info", "--brokers=localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # --------------------------------------------
+  # DEBEZIUM -- Change Data Capture (CDC)
+  # Captura cambios en PostgreSQL y los publica
+  # como eventos en Redpanda (Kafka-compatible).
+  # El conector se registra vía POST a :8083
+  # después del primer arranque.
+  # --------------------------------------------
+  debezium:
+    image: debezium/connect:2.7
+    container_name: tp-debezium
+    restart: unless-stopped
+    mem_limit: 1g
+    mem_reservation: 512m
+    environment:
+      BOOTSTRAP_SERVERS: tp-redpanda:29092
+      GROUP_ID: debezium-group
+      CONFIG_STORAGE_TOPIC: debezium_configs
+      OFFSET_STORAGE_TOPIC: debezium_offsets
+      STATUS_STORAGE_TOPIC: debezium_status
+      # factor=1 porque Redpanda corre en modo single-node
+      CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      STATUS_STORAGE_REPLICATION_FACTOR: "1"
+    ports:
+      - "8083:8083"
+    networks:
+      - treepruning-net
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      pg1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/connectors"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
   # --------------------------------------------
   # KEYCLOAK -- IAM
@@ -364,6 +446,8 @@ services:
       - "traefik.http.routers.sonarqube.entrypoints=websecure"
       - "traefik.http.routers.sonarqube.tls.certresolver=cloudflare"
       - "traefik.http.services.sonarqube.loadbalancer.server.port=9000"
+      # sonar ocupa el puerto 9000 internamente, pero MinIO ya usa 9000:9000
+      # en el host. El mapeo 9010:9000 evita el conflicto.
     restart: unless-stopped
     # SonarQube es pesado (Elasticsearch embedded + Java app). 3g cap deja
     # margen; ya consume ~2g en idle.
@@ -454,6 +538,8 @@ services:
       REDIS_HOST: tp-redis
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI}
+      # Kafka/Redpanda para listener de invalidación de caché CDC
+      KAFKA_BOOTSTRAP_SERVERS: tp-redpanda:29092
     networks:
       - treepruning-net
     depends_on:
@@ -462,6 +548,8 @@ services:
       minio:
         condition: service_started
       redis:
+        condition: service_healthy
+      redpanda:
         condition: service_healthy
     labels:
       - "traefik.enable=false"
@@ -506,6 +594,8 @@ services:
       REDIS_HOST: tp-redis
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI}
+      # Kafka/Redpanda para listener de invalidación de caché CDC
+      KAFKA_BOOTSTRAP_SERVERS: tp-redpanda:29092
     networks:
       - treepruning-net
     depends_on:
@@ -514,6 +604,8 @@ services:
       minio:
         condition: service_started
       redis:
+        condition: service_healthy
+      redpanda:
         condition: service_healthy
     labels:
       - "traefik.enable=false"
@@ -607,3 +699,4 @@ volumes:
   loki_data:
   sonarqube_data:
   sonarqube_logs:
+  redpanda_data:
