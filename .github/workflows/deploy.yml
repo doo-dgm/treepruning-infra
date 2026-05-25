@@ -14,7 +14,6 @@ on:
           - deploy          # Pull + docker compose up -d
           - restart         # docker compose restart
           - down            # docker compose down
-          - fix-kong        # Aplicar fix pg_hba (solo 1ra vez)
           - renew-token     # Renovar token Infisical en el servidor
 
 env:
@@ -145,7 +144,7 @@ jobs:
             # Servicios "shared" (DB, IAM, gateways, observability, etc.) +
             # los services prod (backend, frontend). Se levantan con env=prod.
             # Los services *-dev se levantan con env=dev en una segunda pasada.
-            PROD_SERVICES="pg1 redis keycloak kong-migration kong minio config-server strapi prometheus loki promtail grafana sonarqube traefik backend frontend"
+            PROD_SERVICES="pg1 redis keycloak kong minio config-server strapi prometheus loki promtail grafana sonarqube traefik backend frontend"
             DEV_SERVICES="backend-dev frontend-dev"
 
             case "$ACTION" in
@@ -239,10 +238,6 @@ jobs:
                 docker compose down
                 ;;
 
-              fix-kong)
-                echo "[FIX-KONG] Aplicando fix de pg_hba..."
-                bash \$TP_DIR/scripts/fix-kong.sh --yes
-                ;;
 
               renew-token)
                 echo "[RENEW] Token ya renovado en el paso anterior"
