@@ -116,12 +116,20 @@ services:
     container_name: tp-kong
     mem_limit: 1g
     mem_reservation: 512m
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.kong.rule=Host(`api.treepruning.org`)"
-      - "traefik.http.routers.kong.entrypoints=websecure"
-      - "traefik.http.routers.kong.tls.certresolver=cloudflare"
-      - "traefik.http.services.kong.loadbalancer.server.port=8000"
+  labels:
+    - "traefik.enable=true"
+    # Producción → api.treepruning.org
+    - "traefik.http.routers.kong-prod.rule=Host(`api.treepruning.org`)"
+    - "traefik.http.routers.kong-prod.entrypoints=websecure"
+    - "traefik.http.routers.kong-prod.tls.certresolver=cloudflare"
+    - "traefik.http.routers.kong-prod.priority=100"
+    - "traefik.http.services.kong-prod.loadbalancer.server.port=8000"
+    # Dev → api-dev.treepruning.org
+    - "traefik.http.routers.kong-dev.rule=Host(`api-dev.treepruning.org`)"
+    - "traefik.http.routers.kong-dev.entrypoints=websecure"
+    - "traefik.http.routers.kong-dev.tls.certresolver=cloudflare"
+    - "traefik.http.routers.kong-dev.priority=100"
+    - "traefik.http.services.kong-dev.loadbalancer.server.port=8000"
     restart: unless-stopped
     environment:
       KONG_DATABASE: postgres
@@ -532,11 +540,7 @@ services:
       redis:
         condition: service_healthy
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.backend-dev.rule=Host(`api-dev.treepruning.org`)"
-      - "traefik.http.routers.backend-dev.entrypoints=websecure"
-      - "traefik.http.routers.backend-dev.tls.certresolver=cloudflare"
-      - "traefik.http.services.backend-dev.loadbalancer.server.port=8080"
+      - "traefik.enable=false"
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8080' || exit 1"]
       interval: 30s
