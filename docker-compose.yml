@@ -97,18 +97,17 @@ services:
     mem_reservation: 512m
     labels:
       - "traefik.enable=true"
+      - "traefik.http.services.kong-svc.loadbalancer.server.port=8000"
       - "traefik.http.routers.kong-prod.rule=Host(`api.treepruning.org`)"
       - "traefik.http.routers.kong-prod.entrypoints=websecure"
       - "traefik.http.routers.kong-prod.tls.certresolver=cloudflare"
       - "traefik.http.routers.kong-prod.priority=100"
-      - "traefik.http.services.kong-prod.loadbalancer.server.port=8000"
       - "traefik.http.routers.kong-dev.rule=Host(`api-dev.treepruning.org`)"
       - "traefik.http.routers.kong-dev.entrypoints=websecure"
       - "traefik.http.routers.kong-dev.tls.certresolver=cloudflare"
       - "traefik.http.routers.kong-dev.priority=100"
       - "traefik.http.routers.kong-prod.service=kong-svc"
       - "traefik.http.routers.kong-dev.service=kong-svc"
-      - "traefik.http.services.kong-dev.loadbalancer.server.port=8000"
     restart: unless-stopped
     environment:
       KONG_DATABASE:           "off"
