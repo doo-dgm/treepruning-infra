@@ -1,0 +1,88 @@
+# docker/kong/kong.yml
+_format_version: "3.0"
+_transform: true
+
+services:
+  # ── Producción ─────────────────────────────────────
+  - name: treepruning-backend
+    host: tp-backend
+    protocol: http
+    port: 8080
+    connect_timeout: 60000
+    read_timeout: 60000
+    write_timeout: 60000
+    retries: 5
+    routes:
+      - name: treepruning-prod-route
+        hosts:
+          - api.treepruning.org
+        paths:
+          - /api/v1
+        strip_path: false
+        protocols:
+          - http
+          - https
+    plugins:
+      - name: cors
+        config:
+          origins:
+            - https://treepruning.org
+            - https://www.treepruning.org
+            - https://dev.treepruning.org
+            - https://www.dev.treepruning.org
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          headers:
+            - Accept
+            - Authorization
+            - Content-Type
+          exposed_headers:
+            - Authorization
+          credentials: true
+          max_age: 3600
+
+  # ── Desarrollo ─────────────────────────────────────
+  - name: treepruning-backend-dev
+    host: tp-backend-dev
+    protocol: http
+    port: 8080
+    connect_timeout: 60000
+    read_timeout: 60000
+    write_timeout: 60000
+    retries: 5
+    routes:
+      - name: treepruning-dev-route
+        hosts:
+          - api-dev.treepruning.org
+        paths:
+          - /api/v1
+        strip_path: false
+        protocols:
+          - http
+          - https
+    plugins:
+      - name: cors
+        config:
+          origins:
+            - https://treepruning.org
+            - https://www.treepruning.org
+            - https://dev.treepruning.org
+            - https://www.dev.treepruning.org
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          headers:
+            - Accept
+            - Authorization
+            - Content-Type
+          exposed_headers:
+            - Authorization
+          credentials: true
+          max_age: 3600
