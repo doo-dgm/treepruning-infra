@@ -109,30 +109,30 @@ services:
     - "traefik.http.routers.kong-dev.tls.certresolver=cloudflare"
     - "traefik.http.routers.kong-dev.priority=100"
     - "traefik.http.services.kong-dev.loadbalancer.server.port=8000"
-    restart: unless-stopped
-    environment:
-      KONG_DATABASE:            "off"
-      KONG_DECLARATIVE_CONFIG:  /kong/declarative/kong.yml
-      KONG_PROXY_ACCESS_LOG:    /dev/stdout
-      KONG_ADMIN_ACCESS_LOG:    /dev/stdout
-      KONG_PROXY_ERROR_LOG:     /dev/stderr
-      KONG_ADMIN_ERROR_LOG:     /dev/stderr
-      KONG_ADMIN_LISTEN:        "127.0.0.1:8001"
-    volumes:
-      - ./docker/kong/kong.yml:/kong/declarative/kong.yml:ro
-    ports:
-      - "8000:8000"
-    networks:
-      - treepruning-net
-    depends_on:
-      backend:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "kong", "health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+  restart: unless-stopped
+  environment:
+    KONG_DATABASE:            "off"
+    KONG_DECLARATIVE_CONFIG:  /kong/declarative/kong.yml
+    KONG_PROXY_ACCESS_LOG:    /dev/stdout
+    KONG_ADMIN_ACCESS_LOG:    /dev/stdout
+    KONG_PROXY_ERROR_LOG:     /dev/stderr
+    KONG_ADMIN_ERROR_LOG:     /dev/stderr
+    KONG_ADMIN_LISTEN:        "127.0.0.1:8001"
+  volumes:
+    - ./docker/kong/kong.yml:/kong/declarative/kong.yml:ro
+  ports:
+    - "8000:8000"
+  networks:
+    - treepruning-net
+  depends_on:
+    backend:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD", "kong", "health"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 30s
 
   # --------------------------------------------
   # MINIO -- Object storage S3-compatible
