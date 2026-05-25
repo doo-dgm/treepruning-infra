@@ -144,7 +144,7 @@ jobs:
             # Servicios "shared" (DB, IAM, gateways, observability, etc.) +
             # los services prod (backend, frontend). Se levantan con env=prod.
             # Los services *-dev se levantan con env=dev en una segunda pasada.
-            PROD_SERVICES="pg1 redis keycloak kong minio config-server strapi prometheus loki promtail grafana sonarqube traefik backend frontend"
+            PROD_SERVICES="pg1 redis redpanda debezium keycloak kong minio config-server strapi prometheus loki promtail grafana sonarqube traefik backend frontend"
             DEV_SERVICES="backend-dev frontend-dev"
 
             case "$ACTION" in
