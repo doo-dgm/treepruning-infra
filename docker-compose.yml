@@ -704,6 +704,7 @@ services:
       VITE_FIREBASE_VAPID_KEY: ${VITE_FIREBASE_VAPID_KEY}
       VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY}
       VITE_RECAPTCHA_SITE_KEY: ${VITE_RECAPTCHA_SITE_KEY}
+      FIREBASE_CREDENTIALS_JSON: ${FIREBASE_CREDENTIALS_JSON:-}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.frontend.rule=Host(`treepruning.org`) || Host(`www.treepruning.org`)"
@@ -740,6 +741,7 @@ services:
       VITE_FIREBASE_VAPID_KEY: ${VITE_FIREBASE_VAPID_KEY}
       VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY}
       VITE_RECAPTCHA_SITE_KEY: ${VITE_RECAPTCHA_SITE_KEY}
+      FIREBASE_CREDENTIALS_JSON: ${FIREBASE_CREDENTIALS_JSON:-}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.frontend-dev.rule=Host(`dev.treepruning.org`)"
