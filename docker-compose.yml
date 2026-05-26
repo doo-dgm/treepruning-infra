@@ -60,14 +60,14 @@ services:
     networks:
       - treepruning-net
     healthcheck:
-      # mssql-tools18 es el path en SQL Server 2022.
-      # -C: acepta el certificado autofirmado del servidor.
-      # -b: sale con código != 0 si el query falla.
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b -C -o /dev/null 2>&1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+      # Intenta mssql-tools18 (SQL Server 2022) y cae a mssql-tools si no existe.
+      # -C: confía en el certificado autofirmado. -b: exit != 0 si el query falla.
+      # start_period generoso: SQL Server tarda 45-60s en inicializar por primera vez.
+      test: ["CMD-SHELL", "( /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b -C -o /dev/null 2>&1 ) || ( /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b -o /dev/null 2>&1 )"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 60s
 
   # --------------------------------------------
   # REDIS -- cache + sessions
@@ -591,7 +591,7 @@ services:
       pg1:
         condition: service_healthy
       sqlserver:
-        condition: service_healthy
+        condition: service_started
       minio:
         condition: service_started
       redis:
@@ -660,7 +660,7 @@ services:
       pg1:
         condition: service_healthy
       sqlserver:
-        condition: service_healthy
+        condition: service_started
       minio:
         condition: service_started
       redis:
