@@ -585,6 +585,9 @@ services:
       SQLSERVER_USER: sa
       SQLSERVER_PASSWORD: ${SQLSERVER_PASSWORD}
       SQLSERVER_SCHEMA: ${SQLSERVER_SCHEMA:-dbo}
+      # Firebase / FCM — JSON completo del service-account como string
+      # Obtenerlo en: Firebase Console → Configuración del proyecto → Cuentas de servicio → Generar clave privada
+      FIREBASE_CREDENTIALS_JSON: ${FIREBASE_CREDENTIALS_JSON:-}
     networks:
       - treepruning-net
     depends_on:
@@ -654,6 +657,8 @@ services:
       SQLSERVER_USER: sa
       SQLSERVER_PASSWORD: ${SQLSERVER_PASSWORD}
       SQLSERVER_SCHEMA: ${SQLSERVER_SCHEMA:-dbo}
+      # Firebase / FCM — JSON completo del service-account como string
+      FIREBASE_CREDENTIALS_JSON: ${FIREBASE_CREDENTIALS_JSON:-}
     networks:
       - treepruning-net
     depends_on:
