@@ -210,8 +210,8 @@ services:
   kong:
     image: kong:3.7-ubuntu
     container_name: tp-kong
-    mem_limit: 1g
-    mem_reservation: 512m
+    mem_limit: 3g
+    mem_reservation: 1g
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.kong-svc.loadbalancer.server.port=8000"
