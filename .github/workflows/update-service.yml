@@ -87,6 +87,9 @@ jobs:
             echo "[OK] $SERVICE actualizado (env=\$INFISICAL_ENV)"
             docker ps --filter "name=tp-$SERVICE" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
+            echo "[CLEANUP] Limpiando imagenes dangling..."
+            docker image prune -f
+
             # Verificacion final
             STATE=\$(docker inspect -f '{{.State.Status}}' tp-$SERVICE 2>/dev/null || echo "missing")
             if [[ "\$STATE" != "running" ]]; then

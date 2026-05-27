@@ -201,6 +201,9 @@ jobs:
                 # Limpieza de huerfanos (services que ya no existen en el compose).
                 docker compose up -d --remove-orphans --no-recreate \$PROD_SERVICES \$DEV_SERVICES >/dev/null 2>&1 || true
 
+                echo "[CLEANUP] Limpiando imagenes dangling..."
+                docker image prune -f
+
                 echo "[OK] docker compose up completado"
                 ;;
 

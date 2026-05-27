@@ -10,27 +10,48 @@ Sistema de Gestión de Arbolado Urbano -- Rionegro, Antioquia
 ```
 Internet
   +-- Cloudflare (WAF + CDN + DNS)
-        +-- Azure VM: vm-treepruning (Standard_B4ms, Ubuntu 22.04)
+        +-- Azure VM: vm-treepruning (Standard_B4ms, 32 GB RAM, Ubuntu 22.04)
               Dominio: treepruning.org
               |
               +-- Traefik v2.11 (SSL Let's Encrypt vía Cloudflare DNS)
+                    |
+                    +-- ─── Frontend ─────────────────────────────────────
                     +-- treepruning.org         -> tp-frontend       (prod)
                     +-- dev.treepruning.org     -> tp-frontend-dev   (dev)
-                    +-- api.treepruning.org     -> tp-kong :8000     (prod, vía Kong)
-                    +-- api-dev.treepruning.org -> tp-backend-dev :8080 (dev, directo)
+                    |
+                    +-- ─── API (ambas pasan por Kong) ──────────────────
+                    +-- api.treepruning.org     -> tp-kong :8000     -> tp-backend
+                    +-- api-dev.treepruning.org -> tp-kong :8000     -> tp-backend-dev
+                    |                                                  (incluye Swagger UI)
+                    |
+                    +-- ─── Identidad / CMS ────────────────────────────
                     +-- auth.treepruning.org    -> tp-keycloak :8080
                     +-- cms.treepruning.org     -> tp-strapi :1337
+                    |
+                    +-- ─── Storage ────────────────────────────────────
                     +-- s3.treepruning.org      -> tp-minio :9000
                     +-- console.treepruning.org -> tp-minio :9001
-                    +-- grafana.treepruning.org -> tp-grafana :3000
+                    |
+                    +-- ─── Observabilidad ─────────────────────────────
+                    +-- grafana.treepruning.org -> tp-grafana :3000  (Prometheus + Loki)
                     +-- sonar.treepruning.org   -> tp-sonarqube :9000
 
+Servicios internos (sin exposicion publica):
+  +-- pg1            -- PostgreSQL 16 (WAL logical para Debezium)
+  +-- tp-sqlserver   -- SQL Server 2022 (fallback automatico de pg1)
+  +-- tp-redis       -- Cache distribuida + invalidacion cross-instancia
+  +-- tp-redpanda    -- Broker Kafka-compatible para eventos CDC
+  +-- tp-debezium    -- Captura WAL de pg1 y publica en tp-redpanda
+  +-- tp-loki        -- Agregacion centralizada de logs
+  +-- tp-promtail    -- Shipper de logs Docker -> tp-loki
+  +-- tp-prometheus  -- Scrapea metricas de backends (/actuator/prometheus)
+
 Servicios externos (SaaS -- sin contenedor):
-  +-- Infisical          -- gestión de secretos (reemplaza HashiCorp Vault)
-  +-- Firebase Cloud Messaging -- notificaciones push
-  +-- Google Maps Platform     -- mapas interactivos
-  +-- GitHub Actions           -- CI/CD pipeline
-  +-- Google reCAPTCHA v3      -- validación anti-bot
+  +-- Infisical                 -- gestión de secretos (reemplaza HashiCorp Vault)
+  +-- Firebase Cloud Messaging  -- notificaciones push
+  +-- Google Maps Platform      -- mapas interactivos
+  +-- GitHub Actions            -- CI/CD pipeline
+  +-- Google reCAPTCHA v3       -- validación anti-bot
 ```
 
 ## Estructura del repositorio
@@ -47,7 +68,7 @@ treepruning-infra/
 |       +-- update-service.yml            #  Update incremental (dispatch desde back/front)
 +-- docker/
 |   +-- postgres/
-|   |   +-- init-multiple-dbs.sh         # Crea: kong, keycloak, strapi, sonarqube
+|   |   +-- init-multiple-dbs.sh         # Crea: treepruning, treepruning_dev, kong, keycloak, strapi, sonarqube
 |   +-- prometheus/
 |   |   +-- prometheus.yml
 |   +-- nginx/
@@ -161,8 +182,8 @@ Crear registros tipo **A** apuntando a la IP de la VM con proxy activado ():
 | `@` (raíz) | Frontend (prod) |
 | `www` | Frontend (prod, alias) |
 | `dev` | Frontend (dev) |
-| `api` | Kong (API Gateway) |
-| `api-dev` | Backend (dev directo, sin Kong) |
+| `api` | Kong → tp-backend (prod) |
+| `api-dev` | Kong → tp-backend-dev (dev). Incluye Swagger UI. |
 | `auth` | Keycloak |
 | `cms` | Strapi |
 | `s3` | MinIO API |
@@ -259,8 +280,9 @@ docker stats --no-stream
 |----------|-----|---|-----------------------------|
 | Frontend | `https://treepruning.org` | prod | -- |
 | Frontend Dev | `https://dev.treepruning.org` | dev | -- |
-| API Gateway (vía Kong) | `https://api.treepruning.org` | prod | -- |
-| Backend Dev (directo) | `https://api-dev.treepruning.org` | dev | -- |
+| API Gateway prod (vía Kong) | `https://api.treepruning.org` | prod | -- |
+| API Gateway dev (vía Kong) | `https://api-dev.treepruning.org` | dev | -- |
+| Swagger UI (solo dev) | `https://api-dev.treepruning.org/swagger-ui/index.html` | dev | sin token (publico en dev, ADMIN en prod) |
 | Keycloak Admin | `https://auth.treepruning.org/admin` | shared | `KEYCLOAK_ADMIN_USER` / `KEYCLOAK_ADMIN_PASSWORD` |
 | Strapi Admin | `https://cms.treepruning.org/admin` | shared | Crear en primer acceso |
 | MinIO Consola | `https://console.treepruning.org` | shared | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` |
@@ -329,21 +351,85 @@ ssh -i "vm-treepruning_key.pem" -L 8001:localhost:8001 treepruning@TU_IP_VM -N
 
 ### Strapi
 1. `https://cms.treepruning.org/admin` -> crear cuenta de administrador
-2. **Content-Type Builder** -> crear colecciones:
-   - `NotificationTemplate`: `title`, `body`, `type` (enum: VENCIMIENTO_PQR, BLOQUEO_CUENTA, PODA_ASIGNADA, ALERTA_SISTEMA), `active` (boolean)
-   - `SystemMessage`: `key` (único), `value`, `module` (INVENTARIO, PODAS, PQR, REPORTES, COMUN)
-3. **Settings -> API Tokens -> Create Token** -> Full Access -> copiar para el Backend
+2. **Settings -> Internationalization** -> habilitar `es` (default) y `en`
+3. **Content-Type Builder** -> crear dos colecciones:
+   - **`mensaje`** (catalogo i18n de respuestas API):
+     - `codigo` (UID, unico) — ej: `SUCCESS.PRUNING.SCHEDULED`, `ERROR.PRUNING.TREE_NOT_FOUND`
+     - `texto` (Long text, localizable) — soporta plantillas `{{variable}}`
+     - `categoria` (Enum: `ERROR`, `WARN`, `INFO`, `SUCCESS`, `VALIDATION`)
+     - `descripcion_tecnica` (Short text, opcional)
+     - `activo` (Boolean, default true)
+   - **`parametros`** (parametros de negocio editables sin redeploy):
+     - `clave` (Short text, unico) — ej: `podas.horizonte-meses`
+     - `valor` (Short text)
+4. **Settings -> API Tokens -> Create Token** -> `backend-catalogo-readonly`
+   con permisos `find` y `findOne` para `mensaje` y `parametros`. Guardarlo
+   en Infisical como `STRAPI_API_TOKEN`.
+5. Cargar los mensajes seed (ver `treepruning-backend/CLAUDE.md` para el
+   listado completo de codigos) y los parametros minimos:
+   - `podas.tipo-creacion-preventiva` = `Preventiva`
+   - `podas.estado-creacion-default` = `Planeada`
+   - `podas.horizonte-meses` = `12`
 
 ### Keycloak
 1. `https://auth.treepruning.org/admin` -> login con `KEYCLOAK_ADMIN_USER` / `KEYCLOAK_ADMIN_PASSWORD`
-2. **Create Realm** -> nombre: `treepruning`
-3. **Realm roles -> Create role**  3: `ADMINISTRADOR`, `ENCARGADO_CUADRILLA`, `CIUDADANO`
-4. **Clients -> Create client** -> `treepruning-backend` (bearer-only)
-5. **Clients -> Create client** -> `treepruning-frontend` (Redirect URI: `https://treepruning.org/*`)
-6. **Users -> Create user** -> asignar rol `ADMINISTRADOR` -> Credentials -> Set password
+2. **Create Realm** -> crear DOS realms (uno por entorno):
+   - `tree-pruning` (para `tp-backend` / `api.treepruning.org`)
+   - `tree-pruning-dev` (para `tp-backend-dev` / `api-dev.treepruning.org`)
+3. En cada realm, **Realm roles -> Create role** -> `ADMIN`, `MANAGER`, `PERSON`
+4. **Clients -> Create client** -> `tree-pruning-frontend`:
+   - Client authentication: OFF (public client)
+   - Direct access grants: ON
+   - Redirect URIs: `https://treepruning.org/*` (prod) o `https://dev.treepruning.org/*` (dev)
+5. **Realm settings -> Login -> Brute Force Detection** -> ON (cumple ESC-CAL-SEG-0002)
+6. **Users -> Create user** -> asignar rol -> Credentials -> Set password
 
 ### SonarQube
 1. `https://sonar.treepruning.org` -> login: `admin` / `admin` -> cambiar contraseña a `SONARQUBE_ADMIN_PASSWORD`
+
+---
+
+## Servicios CDC + observabilidad
+
+### CDC — Cambios de BD invalidan caches sin polling
+
+```
+PostgreSQL pg1 (wal_level=logical)
+   |
+   v WAL (replicacion logical)
+tp-debezium (Kafka Connect)  ──publica eventos──>  tp-redpanda (Kafka broker)
+                                                       |
+                                                       v consume
+                                                   tp-backend(-dev) Spring Kafka consumer
+                                                       |
+                                                       v
+                                                   CacheManager.evict(...)
+```
+
+Cuando un admin edita un mensaje en Strapi o un parametro en `/parametros`,
+Debezium captura el cambio en el WAL de PostgreSQL, lo publica en Redpanda
+como evento Kafka, y el backend (que consume el topic) invalida la entrada
+correspondiente de su cache Caffeine. Resultado: cambios visibles en
+milisegundos sin esperar el TTL de 5 min.
+
+### Observabilidad
+
+| Servicio | Funcion |
+|---|---|
+| `tp-prometheus` | Scrapea `/actuator/prometheus` de `tp-backend` y `tp-backend-dev` cada 15s |
+| `tp-promtail` | Lee logs de todos los contenedores Docker via `/var/lib/docker/containers/*/` y los envia a `tp-loki` |
+| `tp-loki` | Almacena logs etiquetados por container/servicio; consultables desde Grafana |
+| `tp-grafana` | Dashboards de metricas (Prometheus) + busqueda de logs (Loki) |
+
+URL: `https://grafana.treepruning.org`. Credenciales: `admin` / `GRAFANA_PASSWORD`.
+
+### Fallback de base de datos
+
+El backend tiene un `DataSourceFallbackPostProcessor` que prueba PostgreSQL
+al arranque. Si pg1 no responde, automaticamente cae a `tp-sqlserver` (SQL
+Server 2022 Developer Edition, gratuito). En condiciones normales nunca se
+activa; existe como red de seguridad para escenarios donde pg1 esta caido
+durante un upgrade o restore.
 
 ---
 
@@ -357,5 +443,8 @@ ssh -i "vm-treepruning_key.pem" -L 8001:localhost:8001 treepruning@TU_IP_VM -N
 - `strapi-app/` se genera en el servidor y **no se versiona** completamente en Git.
 - `infisical.json` **no se versiona** -- se genera dinámicamente desde `INFISICAL_PROJECT_ID`.
 - Los volúmenes Docker **persisten** entre `down`/`up` -- los datos no se pierden al apagar.
+- **Kong `mem_limit: 3g`**: subido desde 1G porque en operacion normal Kong consumia ~960 MB (96%) y se acercaba al OOM. 3G da margen para picos de trafico.
+- **`tp-backend-dev` env vars exclusivas**: `SERVER_PUBLIC_URL` (URL publica para el OpenAPI spec) + `APP_SWAGGER_PUBLIC=true` (Swagger sin token). Estas variables NO existen en `tp-backend` (prod), donde Swagger queda solo accesible con rol ADMIN.
+- **Kong rutas**: el servicio `treepruning-backend-dev` (en `kong.yml`) tiene DOS routes: la principal `/api/v1` (igual que prod) + una adicional `/swagger-ui` y `/swagger-ui.html` que NO existe en el servicio `treepruning-backend` de prod.
 - `AZURE_HOST`, `AZURE_SSH_KEY` y `AZURE_USER` están duplicados en Infisical como referencia, pero el pipeline los toma de GitHub Secrets para conectarse al servidor.
-- **`tp-config-server`**: usa la imagen `hyness/spring-cloud-config-server:5.0.0` (Spring Boot 3, JDK 17.0.17). La imagen 3.1.1-jre17 anterior tenia un bug del JDK con cgroup v2 (`NullPointerException` en `CgroupInfo.getMountPoint()` al inicializar el `MBeanServer`); v5.0.0 lo resuelve. `mem_limit` debe ser >= 768MB porque el buildpack de Paketo lo requiere.
+- **`tp-config-server` (deprecated)**: aun corre como contenedor pero ya no se usa. El backend lee parametros directamente de Strapi (`ParameterCatalogService` -> `/api/parametros`) en vez de Spring Cloud Config. Se puede retirar del compose en un cleanup futuro. Si sigue corriendo, usa la imagen `hyness/spring-cloud-config-server:5.0.0` (la 3.1.1-jre17 tenia un bug con cgroup v2).
