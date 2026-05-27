@@ -64,6 +64,19 @@ services:
         protocols:
           - http
           - https
+      # Swagger / OpenAPI -- solo expuesto en dev (no en prod) para
+      # facilitar la exploracion de la API durante demos y sustentacion.
+      - name: treepruning-dev-swagger
+        hosts:
+          - api-dev.treepruning.org
+        paths:
+          - /swagger-ui
+          - /swagger-ui.html
+          - /v3/api-docs
+        strip_path: false
+        protocols:
+          - http
+          - https
     plugins:
       - name: cors
         config:
