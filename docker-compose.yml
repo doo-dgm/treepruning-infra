@@ -560,7 +560,7 @@ services:
       JPA_DDL_AUTO: validate
       JPA_SHOW_SQL: "false"
       JPA_FORMAT_SQL: "false"
-      JPA_SCHEMA: treepruning
+      JPA_SCHEMA: public
       SERVER_PORT: 8080
       STORAGE_MINIO_ENDPOINT: http://tp-minio:9000
       STORAGE_MINIO_PUBLIC_ENDPOINT: https://s3.treepruning.org
@@ -631,7 +631,7 @@ services:
       JPA_DDL_AUTO: update
       JPA_SHOW_SQL: "true"
       JPA_FORMAT_SQL: "true"
-      JPA_SCHEMA: treepruning
+      JPA_SCHEMA: public
       SERVER_PORT: 8080
       STORAGE_MINIO_ENDPOINT: http://tp-minio:9000
       STORAGE_MINIO_PUBLIC_ENDPOINT: https://s3.treepruning.org
