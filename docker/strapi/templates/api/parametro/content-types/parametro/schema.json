@@ -1,0 +1,25 @@
+{
+  "kind": "collectionType",
+  "collectionName": "parametros",
+  "info": {
+    "singularName": "parametro",
+    "pluralName": "parametros",
+    "displayName": "Parametro",
+    "description": "Parámetros de configuración dinámica del sistema"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "clave": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "valor": {
+      "type": "text",
+      "required": true
+    }
+  }
+}

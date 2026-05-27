@@ -1,0 +1,32 @@
+{
+  "kind": "collectionType",
+  "collectionName": "mensajes",
+  "info": {
+    "singularName": "mensaje",
+    "pluralName": "mensajes",
+    "displayName": "Mensaje",
+    "description": "Catálogo de mensajes i18n para el backend y notificaciones FCM"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "codigo": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "texto": {
+      "type": "text",
+      "required": true
+    },
+    "categoria": {
+      "type": "string"
+    },
+    "activo": {
+      "type": "boolean",
+      "default": true
+    }
+  }
+}

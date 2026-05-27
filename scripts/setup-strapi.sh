@@ -85,6 +85,27 @@ export default ({ env }) => ({
 });
 SERVEREOF
 
+# ── Content types y bootstrap ──────────────────────────────────────────────────
+# Copia los content types (mensaje, parametro) y el bootstrap de semilla.
+# Los schemas JSON le dicen a Strapi qué tablas crear al arrancar.
+# El src/index.ts siembra los datos iniciales si las colecciones están vacías.
+
+TEMPLATES_DIR="$REPO_DIR/docker/strapi/templates"
+
+log "Copiando content types..."
+mkdir -p "$REPO_DIR/strapi-app/src/api"
+cp -r "$TEMPLATES_DIR/api/mensaje"   "$REPO_DIR/strapi-app/src/api/mensaje"
+cp -r "$TEMPLATES_DIR/api/parametro" "$REPO_DIR/strapi-app/src/api/parametro"
+
+log "Copiando bootstrap de semilla (src/index.ts)..."
+# create-strapi-app genera un src/index.ts vacío; lo reemplazamos con el nuestro.
+cp "$TEMPLATES_DIR/src/index.ts" "$REPO_DIR/strapi-app/src/index.ts"
+
 ok "Proyecto Strapi creado en strapi-app/"
+echo ""
+echo "Contenido sembrado al arrancar:"
+echo "  • Content types: mensaje, parametro"
+echo "  • Mensajes i18n:  ~50 códigos (SUCCESS.*, ERROR.*, TECHNICAL.*, notifications.*)"
+echo "  • Parámetros:     podas.horizonte-meses, podas.tipo-creacion-preventiva, podas.estado-creacion-default"
 echo ""
 echo "Ahora ejecutar: tp-up"
