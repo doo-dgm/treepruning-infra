@@ -630,7 +630,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       JPA_DDL_AUTO: update
       JPA_SHOW_SQL: "true"
-      
       JPA_FORMAT_SQL: "true"
       JPA_SCHEMA: public
       SERVER_PORT: 8080
@@ -660,19 +659,12 @@ services:
       SQLSERVER_SCHEMA: ${SQLSERVER_SCHEMA:-dbo}
       # Firebase / FCM — JSON completo del service-account como string
       FIREBASE_CREDENTIALS_JSON: ${FIREBASE_CREDENTIALS_JSON:-}
-      # Springdoc / Swagger -- /v3/api-docs canonico es bloqueado por
-      # Cloudflare WAF (incluyendo /swagger-config). Movemos el path raiz
-      # de OpenAPI bajo /api/v1/openapi para que pase. Springdoc reubica
-      # automaticamente todos sus sub-recursos (swagger-config, .yaml, etc).
-      SPRINGDOC_API_DOCS_PATH: /api/v1/openapi
-      # Que Spring respete X-Forwarded-Proto/Host enviados por Kong y Traefik.
-      SERVER_FORWARD_HEADERS_STRATEGY: framework
-      # Server URL publico que se incluye en el OpenAPI spec. Sin esto,
-      # springdoc autodetecta desde el request y termina con puerto interno
-      # (:8000) o protocolo http en la cadena Cloudflare -> Traefik -> Kong.
+      # ─── Variaciones por entorno (las universales viven en application.properties) ───
+      # Server URL publico que se incluye en el OpenAPI spec.
+      # En prod NO se setea (Swagger no se expone alla via Kong).
       SERVER_PUBLIC_URL: https://api-dev.treepruning.org
-      # Solo en dev: Swagger UI accesible sin token para demo y exploracion.
-      # En prod este flag NO se setea (default false) -> Swagger exige ADMIN.
+      # Swagger UI publico sin token para demo y exploracion.
+      # En prod NO se setea (default false) -> Swagger exige rol ADMIN.
       APP_SWAGGER_PUBLIC: "true"
     networks:
       - treepruning-net
