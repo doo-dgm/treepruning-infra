@@ -661,10 +661,10 @@ services:
       # Firebase / FCM — JSON completo del service-account como string
       FIREBASE_CREDENTIALS_JSON: ${FIREBASE_CREDENTIALS_JSON:-}
       # Springdoc / Swagger -- /v3/api-docs canonico es bloqueado por
-      # Cloudflare WAF; movemos el JSON bajo /api/v1/openapi.json.
-      SPRINGDOC_API_DOCS_PATH: /api/v1/openapi.json
-      SPRINGDOC_SWAGGER_UI_URL: /api/v1/openapi.json
-      SPRINGDOC_SWAGGER_UI_PATH: /swagger-ui/index.html
+      # Cloudflare WAF (incluyendo /swagger-config). Movemos el path raiz
+      # de OpenAPI bajo /api/v1/openapi para que pase. Springdoc reubica
+      # automaticamente todos sus sub-recursos (swagger-config, .yaml, etc).
+      SPRINGDOC_API_DOCS_PATH: /api/v1/openapi
     networks:
       - treepruning-net
     depends_on:
