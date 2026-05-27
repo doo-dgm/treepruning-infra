@@ -660,6 +660,11 @@ services:
       SQLSERVER_SCHEMA: ${SQLSERVER_SCHEMA:-dbo}
       # Firebase / FCM — JSON completo del service-account como string
       FIREBASE_CREDENTIALS_JSON: ${FIREBASE_CREDENTIALS_JSON:-}
+      # Springdoc / Swagger -- /v3/api-docs canonico es bloqueado por
+      # Cloudflare WAF; movemos el JSON bajo /api/v1/openapi.json.
+      SPRINGDOC_API_DOCS_PATH: /api/v1/openapi.json
+      SPRINGDOC_SWAGGER_UI_URL: /api/v1/openapi.json
+      SPRINGDOC_SWAGGER_UI_PATH: /swagger-ui/index.html
     networks:
       - treepruning-net
     depends_on:

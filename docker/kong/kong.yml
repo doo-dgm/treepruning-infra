@@ -64,15 +64,16 @@ services:
         protocols:
           - http
           - https
-      # Swagger / OpenAPI -- solo expuesto en dev (no en prod) para
-      # facilitar la exploracion de la API durante demos y sustentacion.
-      - name: treepruning-dev-swagger
+      # Swagger UI -- solo expuesto en dev (no en prod) para facilitar
+      # la exploracion durante demos y sustentacion. El JSON de OpenAPI
+      # se sirve bajo /api/v1/openapi.json (ya cubierto por la ruta principal)
+      # para evitar el bloqueo de Cloudflare WAF al path canonico /v3/api-docs.
+      - name: treepruning-dev-swagger-ui
         hosts:
           - api-dev.treepruning.org
         paths:
           - /swagger-ui
           - /swagger-ui.html
-          - /v3/api-docs
         strip_path: false
         protocols:
           - http
