@@ -763,5 +763,13 @@ networks:
   treepruning-net:
     driver: bridge
 
+
 volumes:
-  pg1_pgdata:
+  pg1_pgdata:
+  sqlserver_data:
+  redpanda_data:
+  minio_data:
+  loki_data:
+  grafana_data:
+  sonarqube_data:
+  sonarqube_logs:
