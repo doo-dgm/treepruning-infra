@@ -665,6 +665,15 @@ services:
       # de OpenAPI bajo /api/v1/openapi para que pase. Springdoc reubica
       # automaticamente todos sus sub-recursos (swagger-config, .yaml, etc).
       SPRINGDOC_API_DOCS_PATH: /api/v1/openapi
+      # Que Spring respete X-Forwarded-Proto/Host enviados por Kong y Traefik.
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      # Server URL publico que se incluye en el OpenAPI spec. Sin esto,
+      # springdoc autodetecta desde el request y termina con puerto interno
+      # (:8000) o protocolo http en la cadena Cloudflare -> Traefik -> Kong.
+      SERVER_PUBLIC_URL: https://api-dev.treepruning.org
+      # Solo en dev: Swagger UI accesible sin token para demo y exploracion.
+      # En prod este flag NO se setea (default false) -> Swagger exige ADMIN.
+      APP_SWAGGER_PUBLIC: "true"
     networks:
       - treepruning-net
     depends_on:
