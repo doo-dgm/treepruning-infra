@@ -32,7 +32,8 @@ services:
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
       interval: 5s
-      retries: 10
+      timeout: 3s
+      retries: 5
 
   # --------------------------------------------
   # MYSQL 8 -- fallback de PostgreSQL (pg1)
@@ -593,7 +594,7 @@ services:
       - treepruning-net
     depends_on:
       pg1:
-        condition: service_started   # service_started (no service_healthy) para que el
+        condition: service_healthy   # service_started (no service_healthy) para que el
         # backend arranque aunque pg1 esté caído y DataSourceFallback active MySQL.
       mysql:
         condition: service_started
