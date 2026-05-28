@@ -12,7 +12,7 @@
     "insert.mode": "upsert",
     "primary.key.mode": "record_value",
     "primary.key.fields": "id",
-    "delete.enabled": "true",
+    "delete.enabled": "false",
 
     "schema.evolution": "basic",
 
