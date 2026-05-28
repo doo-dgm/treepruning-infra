@@ -84,7 +84,8 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
             ${{ secrets.AZURE_USER }}@${{ secrets.AZURE_HOST }} \
             "chmod +x ${{ env.REPO_DIR }}/scripts/*.sh \
-             && chmod +x ${{ env.REPO_DIR }}/docker/postgres/init-multiple-dbs.sh"
+             && chmod +x ${{ env.REPO_DIR }}/docker/postgres/init-multiple-dbs.sh \
+             && chmod +x ${{ env.REPO_DIR }}/docker/mysql/init-multiple-dbs.sh"
 
       - name: Ejecutar bootstrap.sh en la VM
         # Inyecta las credenciales de Infisical solo durante ESTE step.

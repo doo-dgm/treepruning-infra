@@ -1,0 +1,30 @@
+{
+  "name": "mysql-sink-keycloak",
+  "config": {
+    "connector.class": "io.debezium.connector.jdbc.JdbcSinkConnector",
+
+    "connection.url": "jdbc:mysql://tp-mysql:3306/keycloak?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8",
+    "connection.username": "${file:/kafka/config/connector.properties:MYSQL_USER}",
+    "connection.password": "${file:/kafka/config/connector.properties:MYSQL_PASSWORD}",
+
+    "topics.regex": "keycloak\\.public\\..*",
+
+    "insert.mode": "upsert",
+    "primary.key.mode": "record_key",
+    "delete.enabled": "true",
+
+    "schema.evolution": "basic",
+
+    "table.name.format": "${topic}",
+
+    "batch.size": "500",
+    "tasks.max": "1",
+
+    "database.time_zone": "UTC",
+
+    "transforms": "route",
+    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.route.regex": "[^.]+\\.[^.]+\\.([^.]+)",
+    "transforms.route.replacement": "$1"
+  }
+}

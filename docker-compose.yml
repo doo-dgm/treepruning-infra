@@ -20,8 +20,8 @@ services:
     command: >
       postgres
       -c wal_level=logical
-      -c max_wal_senders=4
-      -c max_replication_slots=4
+      -c max_wal_senders=8
+      -c max_replication_slots=8
     volumes:
       - pg1_pgdata:/var/lib/postgresql/data
       - ./docker/postgres/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
@@ -35,39 +35,38 @@ services:
       retries: 10
 
   # --------------------------------------------
-  # SQL SERVER 2022 -- fallback de PostgreSQL
+  # MYSQL 8 -- fallback de PostgreSQL (pg1)
   # El backend lo activa automáticamente si pg1
   # no responde al arrancar (DataSourceFallback).
-  # Developer Edition: gratuita, sin límite de BD,
-  # NO usar en producción con datos reales sin licencia.
-  # Requiere mínimo 2 GB RAM (límite del motor).
+  # Debezium JDBC Sink mantiene los datos sincronizados
+  # en caliente vía CDC (replicación continua desde pg1).
+  # MYSQL_DATABASE crea la BD treepruning; el init script
+  # crea adicionalmente keycloak y strapi.
   # --------------------------------------------
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: tp-sqlserver
+  mysql:
+    image: mysql:8.4
+    container_name: tp-mysql
     restart: unless-stopped
-    mem_limit: 2g
-    mem_reservation: 1g
+    mem_limit: 1g
+    mem_reservation: 512m
     environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: ${SQLSERVER_PASSWORD}
-      MSSQL_PID: Developer
-      MSSQL_TCP_PORT: 1433
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DB}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     ports:
-      - "1433:1433"
+      - "3306:3306"
     volumes:
-      - sqlserver_data:/var/opt/mssql
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
     networks:
       - treepruning-net
     healthcheck:
-      # Intenta mssql-tools18 (SQL Server 2022) y cae a mssql-tools si no existe.
-      # -C: confía en el certificado autofirmado. -b: exit != 0 si el query falla.
-      # start_period generoso: SQL Server tarda 45-60s en inicializar por primera vez.
-      test: ["CMD-SHELL", "( /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b -C -o /dev/null 2>&1 ) || ( /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b -o /dev/null 2>&1 )"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 15s
-      timeout: 10s
-      retries: 8
-      start_period: 60s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # --------------------------------------------
   # REDIS -- cache + sessions
@@ -134,7 +133,10 @@ services:
   # después del primer arranque.
   # --------------------------------------------
   debezium:
-    image: quay.io/debezium/connect:2.7
+    build:
+      context: ./docker/debezium
+      dockerfile: Dockerfile
+    image: tp-debezium:2.7
     container_name: tp-debezium
     restart: unless-stopped
     mem_limit: 1g
@@ -578,13 +580,12 @@ services:
       KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI}
       # Kafka/Redpanda para listener de invalidación de caché CDC
       KAFKA_BOOTSTRAP_SERVERS: tp-redpanda:29092
-      # SQL Server — fallback automático si PostgreSQL no está disponible
-      SQLSERVER_HOST: tp-sqlserver
-      SQLSERVER_PORT: 1433
-      SQLSERVER_DB: ${SQLSERVER_DB}
-      SQLSERVER_USER: sa
-      SQLSERVER_PASSWORD: ${SQLSERVER_PASSWORD}
-      SQLSERVER_SCHEMA: ${SQLSERVER_SCHEMA:-dbo}
+      # MySQL — fallback automático si pg1 no está disponible al arrancar
+      MYSQL_HOST: tp-mysql
+      MYSQL_PORT: 3306
+      MYSQL_DB: ${MYSQL_DB}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       # Firebase / FCM — JSON completo del service-account como string
       # Obtenerlo en: Firebase Console → Configuración del proyecto → Cuentas de servicio → Generar clave privada
       FIREBASE_CREDENTIALS_JSON: ${FIREBASE_CREDENTIALS_JSON:-}
@@ -592,8 +593,9 @@ services:
       - treepruning-net
     depends_on:
       pg1:
-        condition: service_healthy
-      sqlserver:
+        condition: service_started   # service_started (no service_healthy) para que el
+        # backend arranque aunque pg1 esté caído y DataSourceFallback active MySQL.
+      mysql:
         condition: service_started
       minio:
         condition: service_started
@@ -650,13 +652,8 @@ services:
       KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI}
       # Kafka/Redpanda para listener de invalidación de caché CDC
       KAFKA_BOOTSTRAP_SERVERS: tp-redpanda:29092
-      # SQL Server — fallback automático si PostgreSQL no está disponible
-      SQLSERVER_HOST: tp-sqlserver
-      SQLSERVER_PORT: 1433
-      SQLSERVER_DB: ${SQLSERVER_DB}
-      SQLSERVER_USER: sa
-      SQLSERVER_PASSWORD: ${SQLSERVER_PASSWORD}
-      SQLSERVER_SCHEMA: ${SQLSERVER_SCHEMA:-dbo}
+      # Sin fallback a MySQL en dev: si pg1 no está disponible el entorno de
+      # desarrollo simplemente no levanta. El fallback solo aplica a producción.
       # Firebase / FCM — JSON completo del service-account como string
       FIREBASE_CREDENTIALS_JSON: ${FIREBASE_CREDENTIALS_JSON:-}
       # ─── Variaciones por entorno (las universales viven en application.properties) ───
@@ -671,8 +668,6 @@ services:
     depends_on:
       pg1:
         condition: service_healthy
-      sqlserver:
-        condition: service_started
       minio:
         condition: service_started
       redis:
@@ -773,7 +768,7 @@ networks:
 
 volumes:
   pg1_pgdata:
-  sqlserver_data:
+  mysql_data:
   redpanda_data:
   minio_data:
   loki_data:

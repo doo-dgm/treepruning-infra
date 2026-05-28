@@ -1,0 +1,29 @@
+{
+  "name": "pg-source-treepruning",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "pg1",
+    "database.port": "5432",
+    "database.user": "${file:/kafka/config/connector.properties:POSTGRES_USER}",
+    "database.password": "${file:/kafka/config/connector.properties:POSTGRES_PASSWORD}",
+    "database.dbname": "treepruning",
+
+    "topic.prefix": "treepruning",
+    "plugin.name": "pgoutput",
+    "slot.name": "debezium_slot_treepruning",
+    "publication.name": "debezium_pub_treepruning",
+
+    "snapshot.mode": "initial",
+    "snapshot.isolation.mode": "repeatable_read",
+
+    "table.include.list": "public\\..*",
+
+    "heartbeat.interval.ms": "10000",
+
+    "transforms": "unwrap",
+    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+    "transforms.unwrap.drop.tombstones": "false",
+    "transforms.unwrap.delete.handling.mode": "rewrite",
+    "transforms.unwrap.add.fields": "op,ts_ms"
+  }
+}

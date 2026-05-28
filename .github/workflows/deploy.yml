@@ -89,9 +89,23 @@ jobs:
             -o StrictHostKeyChecking=no \
             ${{ secrets.AZURE_USER }}@${{ secrets.AZURE_HOST }} \
             "chmod +x ${{ env.REPO_DIR }}/scripts/*.sh \
-             && chmod +x ${{ env.REPO_DIR }}/docker/postgres/init-multiple-dbs.sh"
+             && chmod +x ${{ env.REPO_DIR }}/docker/postgres/init-multiple-dbs.sh \
+             && chmod +x ${{ env.REPO_DIR }}/docker/mysql/init-multiple-dbs.sh"
 
-      # ----- 6. Renovar token de Infisical (opcional, best-effort) -----
+      # ----- 6. Build imagen Debezium personalizada -----
+      # Debezium usa una imagen local (build: ./docker/debezium) que agrega el
+      # JDBC Sink connector y el driver MySQL. Hay que construirla antes del
+      # compose up; sin este step la imagen tp-debezium:2.7 no existe en la VM
+      # y el deploy falla. El build es cacheado por Docker: solo descarga de
+      # Maven Central cuando el Dockerfile cambia.
+      - name: Build imagen Debezium (JDBC Sink + MySQL driver)
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.AZURE_USER }}@${{ secrets.AZURE_HOST }} \
+            "cd ${{ env.REPO_DIR }} && docker compose build debezium"
+
+      # ----- 8. Renovar token de Infisical (opcional, best-effort) -----
       - name: Renovar token de Infisical (best-effort)
         run: |
           ssh -i ~/.ssh/deploy_key \
@@ -107,7 +121,7 @@ jobs:
             fi
           ENDSSH
 
-      # ----- 7. Crear strapi-app si no existe -----
+      # ----- 9. Crear strapi-app si no existe -----
       - name: Setup Strapi (si no existe)
         run: |
           ssh -i ~/.ssh/deploy_key \
@@ -124,7 +138,7 @@ jobs:
             fi
           ENDSSH
 
-      # ----- 8. Ejecutar accion principal -----
+      # ----- 10. Ejecutar accion principal -----
       - name: Ejecutar accion - ${{ github.event.inputs.action || 'deploy' }}
         run: |
           ACTION="${{ github.event.inputs.action || 'deploy' }}"
@@ -144,7 +158,7 @@ jobs:
             # Servicios "shared" (DB, IAM, gateways, observability, etc.) +
             # los services prod (backend, frontend). Se levantan con env=prod.
             # Los services *-dev se levantan con env=dev en una segunda pasada.
-            PROD_SERVICES="pg1 redis redpanda debezium keycloak kong minio config-server strapi prometheus loki promtail grafana sonarqube traefik backend frontend"
+            PROD_SERVICES="pg1 mysql redis redpanda debezium keycloak kong minio config-server strapi prometheus loki promtail grafana sonarqube traefik backend frontend"
             DEV_SERVICES="backend-dev frontend-dev"
 
             case "$ACTION" in
@@ -248,7 +262,7 @@ jobs:
             esac
           ENDSSH
 
-      # ----- 9. Health check -----
+      # ----- 11. Health check -----
       - name: Health check de servicios
         if: ${{ github.event.inputs.action == 'deploy' || github.event.inputs.action == '' }}
         run: |
@@ -271,7 +285,7 @@ jobs:
             docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
           ENDSSH
 
-      # ----- 10. Notificacion de resultado -----
+      # ----- 12. Notificacion de resultado -----
       - name: Deploy completado
         if: success()
         run: |
