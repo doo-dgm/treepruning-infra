@@ -22,6 +22,10 @@
 
     "database.time_zone": "UTC",
 
+    "errors.tolerance": "all",
+    "errors.deadletterqueue.topic.name": "keycloak-sink-dlq",
+    "errors.deadletterqueue.context.headers.enable": "true",
+
     "transforms": "route",
     "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
     "transforms.route.regex": "[^.]+\\.[^.]+\\.([^.]+)",

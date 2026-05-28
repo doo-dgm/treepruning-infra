@@ -22,6 +22,12 @@
 
     "database.time_zone": "UTC",
 
+    "hibernate.globally_quoted_identifiers": "true",
+
+    "errors.tolerance": "all",
+    "errors.deadletterqueue.topic.name": "strapi-sink-dlq",
+    "errors.deadletterqueue.context.headers.enable": "true",
+
     "transforms": "route",
     "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
     "transforms.route.regex": "[^.]+\\.[^.]+\\.([^.]+)",
