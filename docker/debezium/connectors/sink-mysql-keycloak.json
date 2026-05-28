@@ -10,7 +10,8 @@
     "topics.regex": "keycloak\\.public\\..*",
 
     "insert.mode": "upsert",
-    "primary.key.mode": "record_key",
+    "primary.key.mode": "record_value",
+    "primary.key.fields": "id",
     "delete.enabled": "true",
 
     "schema.evolution": "basic",
@@ -21,6 +22,8 @@
     "tasks.max": "1",
 
     "database.time_zone": "UTC",
+
+    "hibernate.globally_quoted_identifiers": "true",
 
     "errors.tolerance": "all",
     "errors.deadletterqueue.topic.name": "keycloak-sink-dlq",
