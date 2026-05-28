@@ -26,12 +26,29 @@ DRY_RUN="${DRY_RUN:-0}"
 [[ "$DRY_RUN" == "1" ]] && warn "Modo DRY_RUN activo — no se ejecutarán cambios reales."
 
 # ── Cargar variables ──────────────────────────────────────────────────────────
-ENV_FILE="$(dirname "$0")/../.env"
-if [[ -f "$ENV_FILE" ]]; then
-  set -a; source "$ENV_FILE"; set +a
+# Si las variables ya están en el entorno (inyectadas por Infisical o exportadas
+# manualmente), se usan directamente sin necesitar el .env.
+REQUIRED_VARS=(POSTGRES_USER POSTGRES_PASSWORD MYSQL_USER MYSQL_PASSWORD)
+MISSING_VARS=()
+for v in "${REQUIRED_VARS[@]}"; do
+  [[ -z "${!v:-}" ]] && MISSING_VARS+=("$v")
+done
+
+if [[ ${#MISSING_VARS[@]} -gt 0 ]]; then
+  # Intentar cargar desde .env como fallback
+  ENV_FILE="$(dirname "$0")/../.env"
+  if [[ -f "$ENV_FILE" ]]; then
+    info "Cargando variables desde $ENV_FILE"
+    set -a; source "$ENV_FILE"; set +a
+  else
+    error "Faltan variables requeridas: ${MISSING_VARS[*]}"
+    error "Opciones:"
+    error "  1. Correr con Infisical: infisical run --env=prod -- ./scripts/register-debezium-connectors.sh"
+    error "  2. Exportar manualmente: export POSTGRES_USER=... POSTGRES_PASSWORD=... MYSQL_USER=... MYSQL_PASSWORD=..."
+    exit 1
+  fi
 else
-  error ".env no encontrado. Exporta POSTGRES_USER, POSTGRES_PASSWORD, MYSQL_USER, MYSQL_PASSWORD manualmente."
-  exit 1
+  info "Variables de entorno detectadas (${#REQUIRED_VARS[@]} requeridas presentes)."
 fi
 
 CONNECT_URL="${DEBEZIUM_URL:-http://localhost:8083}"
