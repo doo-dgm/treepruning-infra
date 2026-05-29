@@ -99,8 +99,19 @@ docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" pg1 \
     -e 's/NULL::([a-zA-Z_ ]+)(\[\])?/NULL/g' \
     -e "s/\btrue\b/1/g" \
     -e "s/\bfalse\b/0/g" \
-    -e 's/"([^"]+)"/`\1`/g' \
-| awk -v tf="$TABLES_FILE" 'BEGIN{while((getline l < tf)>0){map[tolower(l)]=l};close(tf)} /^INSERT INTO [A-Za-z_]/{n=index($0," INTO ")+6;m=index(substr($0,n)," ")-1;tbl=substr($0,n,m);rest=substr($0,n+m);actual=(map[tolower(tbl)]!=""?map[tolower(tbl)]:tbl);print "REPLACE INTO " actual rest;next}1' \
+| awk -v tf="$TABLES_FILE" '
+BEGIN{while((getline l < tf)>0){map[tolower(l)]=l};close(tf)}
+/^INSERT INTO [A-Za-z_]/{
+    vpos=index($0," VALUES (")
+    if(vpos>0){head=substr($0,1,vpos-1);tail=substr($0,vpos)}
+    else{head=$0;tail=""}
+    gsub(/"/,"`",head)
+    n=index(head," INTO ")+6;m=index(substr(head,n)," ")-1
+    tbl=substr(head,n,m);rest=substr(head,n+m)
+    actual=(map[tolower(tbl)]!=""?map[tolower(tbl)]:tbl)
+    print "REPLACE INTO " actual rest tail
+    next
+}1' \
 >> "$OUT_FILE"
 
 # Pie
