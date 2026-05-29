@@ -18,9 +18,9 @@ MY_PORT="${MYSQL_PORT:-3306}"
 
 echo "$PREFIX Sondeando PostgreSQL en $PG_HOST:$PG_PORT ..."
 
-# nc (ncat) está disponible en la imagen UBI de Keycloak.
-# -z = solo conectar, -w = timeout en segundos.
-if nc -zw3 "$PG_HOST" "$PG_PORT" 2>/dev/null; then
+# Usa /dev/tcp de bash (built-in, no requiere nc ni curl).
+# timeout 3: evita colgar si pg1 acepta TCP pero no responde.
+if timeout 3 bash -c "exec 3<>/dev/tcp/$PG_HOST/$PG_PORT" 2>/dev/null; then
     echo "$PREFIX PostgreSQL disponible — Keycloak usará PostgreSQL."
     export KC_DB=postgres
     export KC_DB_URL="jdbc:postgresql://${PG_HOST}:${PG_PORT}/keycloak"
