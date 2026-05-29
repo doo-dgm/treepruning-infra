@@ -98,27 +98,16 @@ sed \
     -e "s/\btrue\b/1/g" \
     -e "s/\bfalse\b/0/g" \
 | \
-# Convertir identificadores con comillas dobles a backticks (awk más seguro que sed para esto)
-awk '{
-    gsub(/"([^"]+)"/, function(m) {
-        gsub(/^"|"$/, "", m)
-        return "`" m "`"
-    })
-    print
-}' \
+# Convertir comillas dobles de identificadores a backticks con sed (compatible con mawk/busybox)
+sed -E 's/"([^"]+)"/`\1`/g' \
 | \
 # Añadir cabecera MySQL y deshabilitar checks de FK durante la carga
-awk 'BEGIN {
-    print "SET FOREIGN_KEY_CHECKS=0;"
-    print "SET NAMES utf8mb4;"
-    print ""
-}
-{ print }
-END {
-    print ""
-    print "SET FOREIGN_KEY_CHECKS=1;"
-}' \
+sed '1s/^/SET FOREIGN_KEY_CHECKS=0;\nSET NAMES utf8mb4;\n\n/' \
 > "$OUT_FILE"
+
+# Agregar cierre al final del archivo
+echo "" >> "$OUT_FILE"
+echo "SET FOREIGN_KEY_CHECKS=1;" >> "$OUT_FILE"
 
 log "SQL generado en: $OUT_FILE"
 log "Líneas: $(wc -l < "$OUT_FILE")"
