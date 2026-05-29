@@ -82,7 +82,14 @@ docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" pg1 \
     -e "s/\btrue\b/1/g" \
     -e "s/\bfalse\b/0/g" \
     -e 's/"([^"]+)"/`\1`/g' \
-| sed -E 's/^INSERT INTO `([^`]+)`/INSERT INTO `\U\1`/' \
+| awk '/^INSERT INTO `[^`]+`/ {
+    n = index($0, "`")
+    m = index(substr($0, n+1), "`")
+    tbl = substr($0, n+1, m-1)
+    rest = substr($0, n+m+1)
+    print "INSERT INTO `" toupper(tbl) "`" rest
+    next
+} { print }' \
 >> "$OUT_FILE"
 
 # Pie
