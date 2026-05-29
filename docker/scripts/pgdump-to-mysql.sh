@@ -47,6 +47,19 @@ done
 # =============================================================================
 log "Exportando $PG_DB desde pg1 con pg_dump --inserts ..."
 
+# Obtener nombres exactos de tablas en MySQL antes del pipeline (el awk los necesita)
+log "Obteniendo nombres exactos de tablas en tp-mysql/$MY_DB ..."
+TABLES_FILE=$(mktemp)
+docker exec \
+    -e _PG2MY_PWD="$MYSQL_PASSWORD" \
+    -e _PG2MY_USER="$MYSQL_USER" \
+    -e _PG2MY_DB="$MY_DB" \
+    tp-mysql \
+    bash -c 'mysql --user="$_PG2MY_USER" --password="$_PG2MY_PWD" --database="$_PG2MY_DB" -N -e "SHOW TABLES;" 2>/dev/null' \
+    > "$TABLES_FILE"
+TABLE_COUNT=$(wc -l < "$TABLES_FILE")
+log "$TABLE_COUNT tablas encontradas (primeras 5: $(head -5 "$TABLES_FILE" | tr '\n' ' '))"
+
 # Cabecera: printf garantiza newlines reales (no depende de sed ni de la versión del SO)
 printf 'SET FOREIGN_KEY_CHECKS=0;\nSET NAMES utf8mb4;\n\n' > "$OUT_FILE"
 
@@ -96,19 +109,6 @@ if [[ "$LINES" -lt 5 ]]; then
     error "El archivo SQL tiene muy pocas líneas ($LINES). ¿La base $PG_DB tiene datos?"
     exit 1
 fi
-
-# Mostrar primeras líneas para confirmar que el formato es correcto
-log "Obteniendo nombres exactos de tablas en tp-mysql/$MY_DB ..."
-TABLES_FILE=$(mktemp)
-docker exec \
-    -e _PG2MY_PWD="$MYSQL_PASSWORD" \
-    -e _PG2MY_USER="$MYSQL_USER" \
-    -e _PG2MY_DB="$MY_DB" \
-    tp-mysql \
-    bash -c 'mysql --user="$_PG2MY_USER" --password="$_PG2MY_PWD" --database="$_PG2MY_DB" -N -e "SHOW TABLES;" 2>/dev/null' \
-    > "$TABLES_FILE"
-TABLE_COUNT=$(wc -l < "$TABLES_FILE")
-log "$TABLE_COUNT tablas encontradas en $MY_DB (primeras 5: $(head -5 "$TABLES_FILE" | tr '\n' ' '))"
 
 log "Primeras 6 líneas del SQL generado:"
 head -6 "$OUT_FILE"
