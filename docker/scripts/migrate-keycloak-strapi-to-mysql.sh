@@ -47,6 +47,15 @@ error()  { echo -e "${RED}[migrate]${NC} $*" >&2; }
 log "Preparando directorio de exportaciones en $EXPORT_DIR..."
 mkdir -p "$KC_EXPORT_DIR" "$STRAPI_EXPORT_DIR"
 
+# Resolver el nombre real de la red del compose (incluye el prefijo del proyecto)
+# Ej: tree-pruning_treepruning-net en lugar de treepruning-net
+DOCKER_NETWORK=$(docker inspect tp-keycloak --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' 2>/dev/null | head -1)
+if [[ -z "$DOCKER_NETWORK" ]]; then
+    error "No se pudo detectar la red de tp-keycloak. Abortando."
+    exit 1
+fi
+log "Red Docker detectada: $DOCKER_NETWORK"
+
 # =============================================================================
 # STEP 1: verificar que los contenedores necesarios están corriendo
 # =============================================================================
@@ -72,7 +81,7 @@ log "Exportando realms de Keycloak desde pg1 (contenedor efímero, esto puede ta
 # Un contenedor nuevo no tiene cache → augmenta con postgres → export funciona.
 mkdir -p "$KC_EXPORT_DIR"
 docker run --rm \
-    --network treepruning-net \
+    --network "$DOCKER_NETWORK" \
     -e KC_DB=postgres \
     -e KC_DB_URL="jdbc:postgresql://pg1:5432/keycloak" \
     -e KC_DB_USERNAME="$POSTGRES_USER" \
@@ -149,7 +158,7 @@ log "Importando realms en Keycloak (MySQL, contenedor efímero)..."
 # de la sesión anterior. Usamos otro contenedor efímero apuntando a MySQL para el import.
 # El volumen KC_EXPORT_DIR ya tiene los JSONs de los realms exportados.
 docker run --rm \
-    --network treepruning-net \
+    --network "$DOCKER_NETWORK" \
     -e KC_DB=mysql \
     -e KC_DB_URL="jdbc:mysql://tp-mysql:3306/keycloak?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" \
     -e KC_DB_USERNAME="$MYSQL_USER" \
