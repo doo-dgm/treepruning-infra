@@ -134,12 +134,12 @@ docker compose stop keycloak strapi
 log "Levantando Keycloak con MySQL (creará esquema automáticamente)..."
 docker compose up -d --no-deps keycloak
 
-log "Esperando que Keycloak esté healthy (hasta 5 min — primer boot con MySQL corre 124 changesets)..."
+log "Esperando que Keycloak responda en http://localhost:8180/realms/master (hasta 5 min)..."
 TIMEOUT=300
 ELAPSED=0
-until docker inspect tp-keycloak --format '{{.State.Health.Status}}' 2>/dev/null | grep -q "^healthy$"; do
+until curl -fs http://localhost:8180/realms/master > /dev/null 2>&1; do
     if [[ $ELAPSED -ge $TIMEOUT ]]; then
-        error "Keycloak no alcanzó estado healthy en ${TIMEOUT}s. Revisa: docker logs tp-keycloak"
+        error "Keycloak no respondió en ${TIMEOUT}s. Revisa: docker logs tp-keycloak"
         exit 1
     fi
     sleep 5
@@ -147,7 +147,7 @@ until docker inspect tp-keycloak --format '{{.State.Health.Status}}' 2>/dev/null
     echo -n "."
 done
 echo ""
-log "Keycloak healthy."
+log "Keycloak listo."
 
 # =============================================================================
 # STEP 6: importar realms en Keycloak con MySQL
@@ -176,12 +176,12 @@ log "Realms importados correctamente."
 log "Levantando Strapi con MySQL..."
 docker compose up -d --no-deps strapi
 
-log "Esperando que Strapi esté healthy (hasta 3 min)..."
+log "Esperando que Strapi responda en http://localhost:1337/_health (hasta 3 min)..."
 TIMEOUT=180
 ELAPSED=0
-until docker inspect tp-strapi --format '{{.State.Health.Status}}' 2>/dev/null | grep -q "healthy"; do
+until curl -fs http://localhost:1337/_health > /dev/null 2>&1; do
     if [[ $ELAPSED -ge $TIMEOUT ]]; then
-        error "Strapi no alcanzó estado healthy en ${TIMEOUT}s. Revisa: docker logs tp-strapi"
+        error "Strapi no respondió en ${TIMEOUT}s. Revisa: docker logs tp-strapi"
         exit 1
     fi
     sleep 10
@@ -189,7 +189,7 @@ until docker inspect tp-strapi --format '{{.State.Health.Status}}' 2>/dev/null |
     echo -n "."
 done
 echo ""
-log "Strapi healthy."
+log "Strapi listo."
 
 # =============================================================================
 # STEP 8: importar datos de Strapi
