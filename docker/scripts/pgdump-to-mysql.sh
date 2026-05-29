@@ -124,7 +124,7 @@ docker exec \
     bash -c 'mysql --user="$_PG2MY_USER" --password="$_PG2MY_PWD" \
                    --database="$_PG2MY_DB" \
                    --default-character-set=utf8mb4 \
-                   "$_PG2MY_FILE"' \
+                   < "$_PG2MY_FILE"' \
     && log "✓ Importación completada en $MY_DB." \
     || { error "✗ Error al importar."; exit 1; }
 
