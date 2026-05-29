@@ -59,7 +59,8 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./docker/mysql/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
+      - ./docker/mysql/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/01-init-multiple-dbs.sh
+      - ./docker/mysql/init-treepruning-extra.sql:/docker-entrypoint-initdb.d/02-init-treepruning-extra.sql
     networks:
       - treepruning-net
     healthcheck:
