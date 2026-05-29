@@ -94,7 +94,9 @@ docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" pg1 \
     -e "s/'{}'/'\[\]'/g" \
     -e "s/'{\([^}]*\)}'/'[\1]'/g" \
 | sed -E \
-    -e 's/::[a-zA-Z_ ]+(\[\])?//g' \
+    -e "s/'::([a-zA-Z_ ]+)(\[\])?/'/g" \
+    -e 's/\)::([a-zA-Z_ ]+)(\[\])?/)/g' \
+    -e 's/NULL::([a-zA-Z_ ]+)(\[\])?/NULL/g' \
     -e "s/\btrue\b/1/g" \
     -e "s/\bfalse\b/0/g" \
     -e 's/"([^"]+)"/`\1`/g' \
