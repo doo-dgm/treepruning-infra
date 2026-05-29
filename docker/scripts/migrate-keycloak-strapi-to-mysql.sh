@@ -137,7 +137,7 @@ docker compose up -d --no-deps keycloak
 log "Esperando que Keycloak responda en http://localhost:8180/realms/master (hasta 5 min)..."
 TIMEOUT=300
 ELAPSED=0
-until curl -fs http://localhost:8180/realms/master > /dev/null 2>&1; do
+until curl -fs http://localhost:8180/health/live > /dev/null 2>&1; do
     if [[ $ELAPSED -ge $TIMEOUT ]]; then
         error "Keycloak no respondió en ${TIMEOUT}s. Revisa: docker logs tp-keycloak"
         exit 1
