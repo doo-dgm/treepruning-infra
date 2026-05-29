@@ -61,27 +61,28 @@ log "Todos los contenedores necesarios están corriendo."
 # =============================================================================
 # STEP 2: exportar realms de Keycloak desde pg1
 # =============================================================================
-log "Exportando realms de Keycloak desde pg1 (esto puede tardar 30-60s)..."
+log "Exportando realms de Keycloak desde pg1 (contenedor efímero, esto puede tardar 30-60s)..."
 
-# docker exec -e pasa las variables al proceso hijo explícitamente.
-# Los exports del entrypoint.sh viven solo en ese proceso y no son visibles
-# por nuevos docker exec. Apuntamos siempre a pg1 porque ahí están los datos.
-docker exec \
+# Se usa un contenedor efímero en lugar de docker exec sobre tp-keycloak porque
+# Keycloak 24 (Quarkus) cachea el driver de BD compilado en /opt/keycloak/data/tmp/.
+# Si tp-keycloak arrancó con KC_DB=mysql, ese cache tiene Connector/J grabado;
+# pasar KC_DB=postgres vía docker exec falla con "Connector/J cannot handle postgresql://".
+# Un contenedor nuevo no tiene cache → augmenta con postgres → export funciona.
+mkdir -p "$KC_EXPORT_DIR"
+docker run --rm \
+    --network treepruning-net \
     -e KC_DB=postgres \
     -e KC_DB_URL="jdbc:postgresql://pg1:5432/keycloak" \
     -e KC_DB_USERNAME="$POSTGRES_USER" \
     -e KC_DB_PASSWORD="$POSTGRES_PASSWORD" \
-    tp-keycloak /opt/keycloak/bin/kc.sh export \
-        --dir /tmp/kc-export \
-        --users realm_file \
+    -v "${KC_EXPORT_DIR}:/tmp/kc-export" \
+    quay.io/keycloak/keycloak:24.0 \
+    export --dir /tmp/kc-export --users realm_file \
     2>&1 | grep -v "^$" || true
 
-# Copiar los exports fuera del contenedor
-docker cp tp-keycloak:/tmp/kc-export/. "$KC_EXPORT_DIR/"
-
-REALM_COUNT=$(ls "$KC_EXPORT_DIR"/*.json 2>/dev/null | wc -l)
+REALM_COUNT=$(ls "$KC_EXPORT_DIR"/*.json 2>/dev/null | wc -l || echo 0)
 if [[ "$REALM_COUNT" -eq 0 ]]; then
-    error "No se encontraron archivos de export de Keycloak en $KC_EXPORT_DIR. Abortando."
+    error "No se encontraron archivos de export en $KC_EXPORT_DIR. Revisa los logs del contenedor efímero arriba."
     exit 1
 fi
 log "Exportados $REALM_COUNT realm(s): $(ls "$KC_EXPORT_DIR"/*.json | xargs -n1 basename)"
@@ -136,29 +137,22 @@ log "Keycloak healthy."
 # =============================================================================
 # STEP 6: importar realms en Keycloak con MySQL
 # =============================================================================
-log "Importando realms en Keycloak (MySQL)..."
+log "Importando realms en Keycloak (MySQL, contenedor efímero)..."
 
-# Copiar los exports al contenedor nuevo
-docker cp "$KC_EXPORT_DIR/." tp-keycloak:/tmp/kc-import/
+# Mismo problema que el export: tp-keycloak tiene el cache de Quarkus con el driver
+# de la sesión anterior. Usamos otro contenedor efímero apuntando a MySQL para el import.
+# El volumen KC_EXPORT_DIR ya tiene los JSONs de los realms exportados.
+docker run --rm \
+    --network treepruning-net \
+    -e KC_DB=mysql \
+    -e KC_DB_URL="jdbc:mysql://tp-mysql:3306/keycloak?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" \
+    -e KC_DB_USERNAME="$MYSQL_USER" \
+    -e KC_DB_PASSWORD="$MYSQL_PASSWORD" \
+    -v "${KC_EXPORT_DIR}:/tmp/kc-import:ro" \
+    quay.io/keycloak/keycloak:24.0 \
+    import --dir /tmp/kc-import --override true \
+    2>&1 | tail -20
 
-# Ejecutar import realm por realm
-for realm_file in "$KC_EXPORT_DIR"/*.json; do
-    REALM_NAME=$(basename "$realm_file" .json | sed 's/-realm$//')
-    # El archivo master-realm.json se importa saltando 'master' (ya existe)
-    if [[ "$REALM_NAME" == "master" ]]; then
-        warn "Saltando realm 'master' (Keycloak lo crea automáticamente). Solo se importarán sus usuarios."
-        docker exec tp-keycloak /opt/keycloak/bin/kc.sh import \
-            --file "/tmp/kc-import/$(basename "$realm_file")" \
-            --override true \
-            2>&1 | tail -5 || warn "Import de master puede tener advertencias — es normal."
-    else
-        log "Importando realm: $REALM_NAME"
-        docker exec tp-keycloak /opt/keycloak/bin/kc.sh import \
-            --file "/tmp/kc-import/$(basename "$realm_file")" \
-            --override true \
-            2>&1 | tail -5
-    fi
-done
 log "Realms importados correctamente."
 
 # =============================================================================
