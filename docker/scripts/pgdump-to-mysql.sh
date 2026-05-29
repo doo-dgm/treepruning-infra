@@ -2,21 +2,15 @@
 # =============================================================================
 # pgdump-to-mysql.sh
 #
-# Exporta una base de datos PostgreSQL como INSERTs y los convierte al
-# dialecto MySQL, listos para importar en tp-mysql.
+# Exporta una base de datos PostgreSQL como INSERTs y los importa en MySQL.
 #
 # USO:
 #   infisical run --env=prod --projectId=<ID> -- \
 #     bash docker/scripts/pgdump-to-mysql.sh <pg_database> <mysql_database>
 #
 # EJEMPLOS:
-#   bash pgdump-to-mysql.sh keycloak keycloak
-#   bash pgdump-to-mysql.sh strapi   strapi
-#
-# PREREQUISITOS:
-#   - pg1 corriendo y healthy
-#   - tp-mysql corriendo y healthy
-#   - Variables: POSTGRES_USER, POSTGRES_PASSWORD, MYSQL_USER, MYSQL_PASSWORD
+#   bash docker/scripts/pgdump-to-mysql.sh keycloak keycloak
+#   bash docker/scripts/pgdump-to-mysql.sh strapi   strapi
 # =============================================================================
 set -euo pipefail
 
@@ -25,7 +19,6 @@ MY_DB="${2:-}"
 
 if [[ -z "$PG_DB" || -z "$MY_DB" ]]; then
     echo "Uso: bash $0 <pg_database> <mysql_database>"
-    echo "  ej: bash $0 keycloak keycloak"
     exit 1
 fi
 
@@ -50,10 +43,14 @@ for c in pg1 tp-mysql; do
 done
 
 # =============================================================================
-# STEP 2: pg_dump --inserts desde pg1
+# STEP 2: exportar desde pg1 y transformar a dialecto MySQL
 # =============================================================================
 log "Exportando $PG_DB desde pg1 con pg_dump --inserts ..."
 
+# Cabecera: printf garantiza newlines reales (no depende de sed ni de la versión del SO)
+printf 'SET FOREIGN_KEY_CHECKS=0;\nSET NAMES utf8mb4;\n\n' > "$OUT_FILE"
+
+# pg_dump + transformaciones en pipeline
 docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" pg1 \
     pg_dump \
         --username="$POSTGRES_USER" \
@@ -65,74 +62,78 @@ docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" pg1 \
         --no-privileges \
         --no-comments \
     2>/dev/null \
-| \
-# =============================================================================
-# STEP 3: transformaciones PostgreSQL → MySQL
-# =============================================================================
-# Las transformaciones se aplican en pipeline con sed/awk:
-#
-# 1. Eliminar líneas que no tienen sentido en MySQL:
-#    SET client_encoding, SET standard_conforming_strings, SELECT pg_catalog...
-#    ALTER SEQUENCE, SELECT setval, COPY ... FROM stdin, \.
-# 2. Quitar el schema "public." de los nombres de tabla
-# 3. Convertir comillas dobles de identificadores a backticks
-# 4. Convertir booleanos: 't'/'f' → 1/0 (PostgreSQL los serializa como char)
-# 5. Convertir 'true'/'false' literales a 1/0
-# 6. Eliminar casts de tipo (::text, ::character varying, ::uuid, etc.)
-# 7. Reemplazar '' (empty string boolean) por NULL donde corresponda
-# =============================================================================
-sed \
+| sed \
     -e '/^SET /d' \
+    -e '/^\\connect/d' \
     -e '/^SELECT pg_catalog/d' \
     -e '/^ALTER SEQUENCE/d' \
     -e '/^CREATE SEQUENCE/d' \
     -e '/^SELECT setval/d' \
     -e '/^COPY /d' \
-    -e '/^\\\./d' \
+    -e '/^\\/d' \
     -e '/^--/d' \
     -e '/^$/d' \
-    -e "s/public\\.//g" \
-    -e "s/\"public\"\.//g" \
-    -e 's/::[a-zA-Z_ ]*\(\[[0-9]*\]\)\{0,1\}//g' \
+    -e 's/public\.//g' \
+    -e 's/"public"\.//g' \
     -e "s/'true'/1/g" \
     -e "s/'false'/0/g" \
+| sed -E \
+    -e 's/::[a-zA-Z_ ]+(\[\])?//g' \
     -e "s/\btrue\b/1/g" \
     -e "s/\bfalse\b/0/g" \
-| \
-# Convertir comillas dobles de identificadores a backticks con sed (compatible con mawk/busybox)
-sed -E 's/"([^"]+)"/`\1`/g' \
-| \
-# Añadir cabecera MySQL y deshabilitar checks de FK durante la carga
-sed '1s/^/SET FOREIGN_KEY_CHECKS=0;\nSET NAMES utf8mb4;\n\n/' \
-> "$OUT_FILE"
+    -e 's/"([^"]+)"/`\1`/g' \
+>> "$OUT_FILE"
 
-# Agregar cierre al final del archivo
-echo "" >> "$OUT_FILE"
-echo "SET FOREIGN_KEY_CHECKS=1;" >> "$OUT_FILE"
+# Pie
+printf '\nSET FOREIGN_KEY_CHECKS=1;\n' >> "$OUT_FILE"
 
-log "SQL generado en: $OUT_FILE"
-log "Líneas: $(wc -l < "$OUT_FILE")"
+LINES=$(wc -l < "$OUT_FILE")
+log "SQL generado en: $OUT_FILE ($LINES líneas)"
+
+# Verificar que hay contenido útil (más que solo el header + footer)
+if [[ "$LINES" -lt 5 ]]; then
+    error "El archivo SQL tiene muy pocas líneas ($LINES). ¿La base $PG_DB tiene datos?"
+    exit 1
+fi
+
+# Mostrar primeras líneas para confirmar que el formato es correcto
+log "Primeras 6 líneas del SQL generado:"
+head -6 "$OUT_FILE"
 
 # =============================================================================
-# STEP 4: importar a MySQL
+# STEP 3: copiar SQL al contenedor y ejecutar desde adentro
 # =============================================================================
+# Copiar el archivo SQL al contenedor evita stdin redirect + caracteres especiales
+log "Copiando SQL a tp-mysql:/tmp/import_${PG_DB}.sql ..."
+docker cp "$OUT_FILE" "tp-mysql:/tmp/import_${PG_DB}.sql"
+
 log "Importando en tp-mysql/$MY_DB ..."
-warn "Esto puede tardar varios minutos dependiendo del volumen de datos."
+warn "Esto puede tardar varios minutos."
 
-# MYSQL_PWD evita pasar la contraseña como argumento de CLI,
-# lo cual falla cuando contiene caracteres especiales.
-docker exec -i -e MYSQL_PWD="$MYSQL_PASSWORD" tp-mysql \
-    mysql \
-        --user="$MYSQL_USER" \
-        --database="$MY_DB" \
-        --default-character-set=utf8mb4 \
-    < "$OUT_FILE" \
+# Pasar usuario y contraseña como variables de entorno al contenedor.
+# La contraseña puede contener cualquier caracter especial — docker exec -e
+# la pasa como valor de entorno sin interpretación de shell adicional.
+# Dentro del contenedor, bash -c con comillas simples expande $VAR del entorno
+# del contenedor, no del host — completamente seguro para contraseñas complejas.
+docker exec \
+    -e _PG2MY_PWD="$MYSQL_PASSWORD" \
+    -e _PG2MY_USER="$MYSQL_USER" \
+    -e _PG2MY_DB="$MY_DB" \
+    -e _PG2MY_FILE="/tmp/import_${PG_DB}.sql" \
+    tp-mysql \
+    bash -c 'mysql --user="$_PG2MY_USER" --password="$_PG2MY_PWD" \
+                   --database="$_PG2MY_DB" \
+                   --default-character-set=utf8mb4 \
+                   "$_PG2MY_FILE"' \
     && log "✓ Importación completada en $MY_DB." \
-    || { error "✗ Error al importar. Revisa $OUT_FILE para ver las sentencias generadas."; exit 1; }
+    || { error "✗ Error al importar."; exit 1; }
+
+# Limpiar el archivo temporal del contenedor
+docker exec tp-mysql rm -f "/tmp/import_${PG_DB}.sql"
 
 echo ""
 echo -e "${GREEN}============================================================${NC}"
 echo -e "${GREEN}  Migración $PG_DB → MySQL/$MY_DB completada${NC}"
 echo -e "${GREEN}============================================================${NC}"
-echo "  SQL guardado en: $OUT_FILE  (cópialo si quieres repetir la carga)"
+echo "  SQL guardado en: $OUT_FILE"
 echo ""
