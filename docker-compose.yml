@@ -188,23 +188,33 @@ services:
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://pg1:5432/keycloak
-      KC_DB_USERNAME: ${POSTGRES_USER}
-      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
       KC_HTTP_ENABLED: "true"
       KC_HOSTNAME_STRICT_HTTPS: "false"
       KC_HOSTNAME: auth.treepruning.org
       KC_PROXY: edge
       KC_HOSTNAME_STRICT: "true"
-    command: start-dev
+      # Failover: entrypoint.sh sondea pg1 y elige PostgreSQL o MySQL
+      POSTGRES_HOST: pg1
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      MYSQL_HOST: tp-mysql
+      MYSQL_PORT: "3306"
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    # El entrypoint elige la BD; no se pasa command (start-dev está hardcodeado en el script)
+    entrypoint: ["/bin/bash", "/opt/keycloak-entrypoint.sh"]
     ports:
       - "8180:8080"
+    volumes:
+      - ./docker/keycloak/entrypoint.sh:/opt/keycloak-entrypoint.sh:ro
     networks:
       - treepruning-net
     depends_on:
       pg1:
-        condition: service_healthy
+        condition: service_started   # service_started: arranca aunque pg1 esté caído
+      mysql:
+        condition: service_healthy   # MySQL siempre disponible como fallback
 
   # --------------------------------------------
   # KONG -- API Gateway (DB-less / declarativo)
@@ -335,12 +345,16 @@ services:
     restart: unless-stopped
     working_dir: /app
     environment:
-      DATABASE_CLIENT: postgres
-      DATABASE_HOST: pg1
-      DATABASE_PORT: 5432
+      # Failover: entrypoint.sh sondea pg1 y elige PostgreSQL o MySQL
       DATABASE_NAME: strapi
-      DATABASE_USERNAME: ${POSTGRES_USER}
-      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: pg1
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      MYSQL_HOST: tp-mysql
+      MYSQL_PORT: "3306"
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       JWT_SECRET: ${STRAPI_JWT_SECRET}
       ADMIN_JWT_SECRET: ${STRAPI_ADMIN_JWT_SECRET}
       APP_KEYS: ${STRAPI_APP_KEYS}
@@ -351,12 +365,15 @@ services:
       - "1337:1337"
     volumes:
       - ./strapi-app:/app
-    command: sh -c "npm run develop"
+      - ./docker/strapi/entrypoint.sh:/entrypoint.sh:ro
+    command: sh /entrypoint.sh
     networks:
       - treepruning-net
     depends_on:
       pg1:
-        condition: service_healthy
+        condition: service_started   # service_started: arranca aunque pg1 esté caído
+      mysql:
+        condition: service_healthy   # MySQL siempre disponible como fallback
     mem_limit: 1g
     mem_reservation: 512m
     healthcheck:
