@@ -35,4 +35,4 @@ else
     export DATABASE_PASSWORD="$MYSQL_PASSWORD"
 fi
 
-npm run build && exec npm run start
+NODE_OPTIONS="--max-old-space-size=2048" npm run build && exec npm run start

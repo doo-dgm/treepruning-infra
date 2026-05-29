@@ -384,8 +384,8 @@ services:
         condition: service_started   # service_started: arranca aunque pg1 esté caído
       mysql:
         condition: service_healthy   # MySQL siempre disponible como fallback
-    mem_limit: 1g
-    mem_reservation: 512m
+    mem_limit: 2g
+    mem_reservation: 1g
     healthcheck:
       # busybox wget viene en node:20-alpine; /_health responde 204 No Content
       # sin auth. Usamos 127.0.0.1 explicito porque Strapi 5 solo escucha en
