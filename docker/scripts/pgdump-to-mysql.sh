@@ -91,6 +91,8 @@ docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" pg1 \
     -e 's/"public"\.//g' \
     -e "s/'true'/1/g" \
     -e "s/'false'/0/g" \
+    -e "s/'{}'/'\[\]'/g" \
+    -e "s/'{\([^}]*\)}'/'[\1]'/g" \
 | sed -E \
     -e 's/::[a-zA-Z_ ]+(\[\])?//g' \
     -e "s/\btrue\b/1/g" \
