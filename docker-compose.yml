@@ -655,6 +655,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: tp-redpanda:29092
       # Sin fallback a MySQL en dev: si pg1 no está disponible el entorno de
       # desarrollo simplemente no levanta. El fallback solo aplica a producción.
+      DATASOURCE_FALLBACK_ENABLED: "false"
       # Firebase / FCM — JSON completo del service-account como string
       FIREBASE_CREDENTIALS_JSON: ${FIREBASE_CREDENTIALS_JSON:-}
       # ─── Variaciones por entorno (las universales viven en application.properties) ───
