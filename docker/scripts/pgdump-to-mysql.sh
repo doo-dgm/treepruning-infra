@@ -71,6 +71,7 @@ docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" pg1 \
         --dbname="$PG_DB" \
         --data-only \
         --inserts \
+        --column-inserts \
         --no-owner \
         --no-privileges \
         --no-comments \
