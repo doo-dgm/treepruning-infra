@@ -57,6 +57,7 @@ log "Exportando $PG_DB desde pg1 con pg_dump --inserts ..."
 docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" pg1 \
     pg_dump \
         --username="$POSTGRES_USER" \
+        --host=localhost \
         --dbname="$PG_DB" \
         --data-only \
         --inserts \
@@ -118,10 +119,11 @@ log "Líneas: $(wc -l < "$OUT_FILE")"
 log "Importando en tp-mysql/$MY_DB ..."
 warn "Esto puede tardar varios minutos dependiendo del volumen de datos."
 
-docker exec -i tp-mysql \
+# MYSQL_PWD evita pasar la contraseña como argumento de CLI,
+# lo cual falla cuando contiene caracteres especiales.
+docker exec -i -e MYSQL_PWD="$MYSQL_PASSWORD" tp-mysql \
     mysql \
         --user="$MYSQL_USER" \
-        --password="$MYSQL_PASSWORD" \
         --database="$MY_DB" \
         --default-character-set=utf8mb4 \
     < "$OUT_FILE" \
