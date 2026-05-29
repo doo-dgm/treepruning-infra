@@ -18,9 +18,8 @@ MY_PORT="${MYSQL_PORT:-3306}"
 
 echo "$PREFIX Sondeando PostgreSQL en $PG_HOST:$PG_PORT ..."
 
-# node:20-alpine trae busybox nc pero su flag -w es en ms, no segundos, y varía.
-# Usamos un TCP connect con timeout via /dev/tcp de sh (ash en alpine lo soporta).
-if timeout 3 sh -c "exec 3<>/dev/tcp/$PG_HOST/$PG_PORT" 2>/dev/null; then
+# node:20-alpine trae busybox nc. Usamos -z (port scan) con -w 3 (timeout en segundos).
+if nc -z -w 3 "$PG_HOST" "$PG_PORT" 2>/dev/null; then
     echo "$PREFIX PostgreSQL disponible — Strapi usará PostgreSQL."
     export DATABASE_CLIENT=postgres
     export DATABASE_HOST="$PG_HOST"
