@@ -26,7 +26,9 @@
 # =============================================================================
 set -euo pipefail
 
-EXPORT_DIR="$(dirname "$0")/migration-exports"
+# Rutas absolutas — docker run -v requiere ruta absoluta (no relativa)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+EXPORT_DIR="$SCRIPT_DIR/migration-exports"
 KC_EXPORT_DIR="$EXPORT_DIR/keycloak"
 STRAPI_EXPORT_DIR="$EXPORT_DIR/strapi"
 
@@ -80,12 +82,16 @@ docker run --rm \
     export --dir /tmp/kc-export --users realm_file \
     2>&1 | grep -v "^$" || true
 
-REALM_COUNT=$(ls "$KC_EXPORT_DIR"/*.json 2>/dev/null | wc -l || echo 0)
+shopt -s nullglob
+REALM_FILES=("$KC_EXPORT_DIR"/*.json)
+REALM_COUNT="${#REALM_FILES[@]}"
+shopt -u nullglob
+
 if [[ "$REALM_COUNT" -eq 0 ]]; then
     error "No se encontraron archivos de export en $KC_EXPORT_DIR. Revisa los logs del contenedor efímero arriba."
     exit 1
 fi
-log "Exportados $REALM_COUNT realm(s): $(ls "$KC_EXPORT_DIR"/*.json | xargs -n1 basename)"
+log "Exportados $REALM_COUNT realm(s): $(for f in "${REALM_FILES[@]}"; do basename "$f"; done | tr '\n' ' ')"
 
 # =============================================================================
 # STEP 3: exportar datos de Strapi
