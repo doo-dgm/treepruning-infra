@@ -61,12 +61,19 @@ log "Todos los contenedores necesarios están corriendo."
 # =============================================================================
 # STEP 2: exportar realms de Keycloak desde pg1
 # =============================================================================
-log "Exportando realms de Keycloak (esto puede tardar 30-60s)..."
+log "Exportando realms de Keycloak desde pg1 (esto puede tardar 30-60s)..."
 
-# kc.sh export escribe los JSONs en el directorio indicado dentro del contenedor
-docker exec tp-keycloak /opt/keycloak/bin/kc.sh export \
-    --dir /tmp/kc-export \
-    --users realm_file \
+# docker exec -e pasa las variables al proceso hijo explícitamente.
+# Los exports del entrypoint.sh viven solo en ese proceso y no son visibles
+# por nuevos docker exec. Apuntamos siempre a pg1 porque ahí están los datos.
+docker exec \
+    -e KC_DB=postgres \
+    -e KC_DB_URL="jdbc:postgresql://pg1:5432/keycloak" \
+    -e KC_DB_USERNAME="$POSTGRES_USER" \
+    -e KC_DB_PASSWORD="$POSTGRES_PASSWORD" \
+    tp-keycloak /opt/keycloak/bin/kc.sh export \
+        --dir /tmp/kc-export \
+        --users realm_file \
     2>&1 | grep -v "^$" || true
 
 # Copiar los exports fuera del contenedor
