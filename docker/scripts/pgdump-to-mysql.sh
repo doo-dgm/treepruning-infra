@@ -82,14 +82,7 @@ docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" pg1 \
     -e "s/\btrue\b/1/g" \
     -e "s/\bfalse\b/0/g" \
     -e 's/"([^"]+)"/`\1`/g' \
-| awk '/^INSERT INTO `[^`]+`/ {
-    n = index($0, "`")
-    m = index(substr($0, n+1), "`")
-    tbl = substr($0, n+1, m-1)
-    rest = substr($0, n+m+1)
-    print "INSERT INTO `" toupper(tbl) "`" rest
-    next
-} { print }' \
+| awk '/^INSERT INTO `/{n=index($0,"`");m=index(substr($0,n+1),"`");tbl=substr($0,n+1,m-1);rest=substr($0,n+m+1);print "INSERT INTO `" toupper(tbl) "`" rest;next}1' \
 >> "$OUT_FILE"
 
 # Pie
@@ -105,7 +98,16 @@ if [[ "$LINES" -lt 5 ]]; then
 fi
 
 # Mostrar primeras líneas para confirmar que el formato es correcto
-log "Primeras 6 líneas del SQL generado:"
+log "Tablas existentes en tp-mysql/$MY_DB:"
+docker exec \
+    -e _PG2MY_PWD="$MYSQL_PASSWORD" \
+    -e _PG2MY_USER="$MYSQL_USER" \
+    -e _PG2MY_DB="$MY_DB" \
+    tp-mysql \
+    bash -c 'mysql --user="$_PG2MY_USER" --password="$_PG2MY_PWD" --database="$_PG2MY_DB" -e "SHOW TABLES;" 2>/dev/null' \
+    | head -20
+
+log "Primeras 6 líneas del SQL generado (verificar UPPERCASE):"
 head -6 "$OUT_FILE"
 
 # =============================================================================
