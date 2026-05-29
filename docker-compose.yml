@@ -594,7 +594,7 @@ services:
       - treepruning-net
     depends_on:
       pg1:
-        condition: service_healthy   # service_started (no service_healthy) para que el
+        condition: service_started   # service_started (no service_healthy) para que el
         # backend arranque aunque pg1 esté caído y DataSourceFallback active MySQL.
       mysql:
         condition: service_started
