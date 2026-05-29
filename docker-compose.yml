@@ -352,9 +352,6 @@ services:
       - "traefik.http.routers.strapi.entrypoints=websecure"
       - "traefik.http.routers.strapi.tls.certresolver=cloudflare"
       - "traefik.http.services.strapi.loadbalancer.server.port=1337"
-      - "traefik.http.services.strapi.loadbalancer.serversTransport=strapi-transport"
-      - "traefik.http.serversTransports.strapi-transport.forwardingTimeouts.responseHeaderTimeout=300s"
-      - "traefik.http.serversTransports.strapi-transport.forwardingTimeouts.idleConnTimeout=300s"
     restart: unless-stopped
     working_dir: /app
     environment:
