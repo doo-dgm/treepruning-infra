@@ -103,10 +103,23 @@ BEGIN{while((getline l < tf)>0){map[tolower(l)]=l};close(tf)}
     vpos=index($0," VALUES (")
     if(vpos>0){head=substr($0,1,vpos-1);tail=substr($0,vpos)}
     else{head=$0;tail=""}
-    gsub(/"/,"`",head)
-    n=index(head," INTO ")+6;m=index(substr(head,n)," ")-1
-    tbl=substr(head,n,m);rest=substr(head,n+m)
+    # Tabla: extraer y mapear al nombre real en MySQL
+    n=index(head," INTO ")+6; m=index(substr(head,n)," ")-1
+    tbl=substr(head,n,m); rest=substr(head,n+m)
     actual=(map[tolower(tbl)]!=""?map[tolower(tbl)]:tbl)
+    # Backtickear todas las columnas del INSERT (entre paréntesis antes de VALUES)
+    ppos=index(rest,"(")
+    if(ppos>0){
+        colpart=substr(rest,ppos+1,length(rest)-ppos-1)
+        ncols=split(colpart,cols,", ")
+        quoted=""
+        for(i=1;i<=ncols;i++){
+            if(i>1) quoted=quoted", "
+            gsub(/"/,"",cols[i])
+            quoted=quoted"`"cols[i]"`"
+        }
+        rest=substr(rest,1,ppos-1)"("quoted")"
+    }
     print "REPLACE INTO " actual rest tail
     next
 }1' \
