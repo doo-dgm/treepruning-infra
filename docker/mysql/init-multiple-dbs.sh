@@ -9,10 +9,10 @@ echo ">>> Creando bases de datos adicionales en MySQL..."
 
 mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<-EOSQL
     CREATE DATABASE IF NOT EXISTS keycloak
-        CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+        CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
     CREATE DATABASE IF NOT EXISTS strapi
-        CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+        CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
     GRANT ALL PRIVILEGES ON keycloak.* TO '${MYSQL_USER}'@'%';
     GRANT ALL PRIVILEGES ON strapi.*   TO '${MYSQL_USER}'@'%';
