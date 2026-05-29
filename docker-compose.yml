@@ -215,6 +215,13 @@ services:
         condition: service_started   # service_started: arranca aunque pg1 esté caído
       mysql:
         condition: service_healthy   # MySQL siempre disponible como fallback
+    healthcheck:
+      # /realms/master responde 200 cuando Keycloak está listo para aceptar requests
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/realms/master > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
 
   # --------------------------------------------
   # KONG -- API Gateway (DB-less / declarativo)

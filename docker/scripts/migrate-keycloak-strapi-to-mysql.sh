@@ -134,10 +134,10 @@ docker compose stop keycloak strapi
 log "Levantando Keycloak con MySQL (creará esquema automáticamente)..."
 docker compose up -d --no-deps keycloak
 
-log "Esperando que Keycloak esté healthy (hasta 3 min)..."
-TIMEOUT=180
+log "Esperando que Keycloak esté healthy (hasta 5 min — primer boot con MySQL corre 124 changesets)..."
+TIMEOUT=300
 ELAPSED=0
-until docker inspect tp-keycloak --format '{{.State.Health.Status}}' 2>/dev/null | grep -q "healthy"; do
+until docker inspect tp-keycloak --format '{{.State.Health.Status}}' 2>/dev/null | grep -q "^healthy$"; do
     if [[ $ELAPSED -ge $TIMEOUT ]]; then
         error "Keycloak no alcanzó estado healthy en ${TIMEOUT}s. Revisa: docker logs tp-keycloak"
         exit 1
