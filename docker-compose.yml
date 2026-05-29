@@ -217,12 +217,13 @@ services:
       mysql:
         condition: service_healthy   # MySQL siempre disponible como fallback
     healthcheck:
-      # /health/live responde 200 en localhost sin validar hostname (requiere KC_HEALTH_ENABLED=true)
-      test: ["CMD-SHELL", "curl -fs http://localhost:8080/health/live > /dev/null || exit 1"]
-      interval: 15s
+      # bash /dev/tcp: built-in, no depende de curl ni wget.
+      # Verifica que el puerto 8080 acepta conexiones TCP.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8080' 2>/dev/null || exit 1"]
+      interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 120s
+      retries: 6
+      start_period: 30s
 
   # --------------------------------------------
   # KONG -- API Gateway (DB-less / declarativo)
