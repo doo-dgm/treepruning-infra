@@ -35,4 +35,4 @@ else
     export DATABASE_PASSWORD="$MYSQL_PASSWORD"
 fi
 
-exec npm run develop
+npm run build && exec npm run start
